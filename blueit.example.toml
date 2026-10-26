@@ -1,0 +1,13 @@
+# Copy this file to blueit.toml and change what you like.
+[blueit]
+subreddits = ["nosleep", "LetsNotMeet", "Glitch_in_the_Matrix", "TrueScaryStories", "shortscarystories"]
+search = ""            # optional search words, e.g. "cabin"; leave empty for top posts
+time_filter = "month"  # hour, day, week, month, year or all
+limit = 25             # posts to look at per subreddit
+min_words = 400        # skip anything shorter
+max_words = 12000      # skip anything longer (about 80 minutes of narration)
+min_score = 100        # skip posts with fewer upvotes
+allow_nsfw = false
+output = "output"      # finished videos go here, one folder per story
+images = "images"      # your reference pictures go here
+clip_seconds = 60      # length of each part

@@ -1,0 +1,17 @@
+[project]
+name = "blueit"
+version = "0.1.0"
+description = "Finds finished Reddit stories and turns them into narrated still-image videos, whole and in 1-minute parts."
+requires-python = ">=3.11"
+authors = [{ name = "Anthony Evo" }]
+dependencies = []
+
+[project.scripts]
+blueit = "blueit.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["blueit"]

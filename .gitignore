@@ -1,0 +1,8 @@
+__pycache__/
+*.egg-info/
+.venv/
+.env
+blueit.toml
+output/
+images/
+voice/
