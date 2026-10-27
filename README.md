@@ -23,8 +23,9 @@ Run `python -m blueit check <saved listing.json>` to see which posts pass and wh
 Built one piece a day. Done so far:
 
 1. ✅ Finished-story check, text cleaning for narration, settings, `check` command and tests
+2. ✅ Reddit search through the official API: app-only sign-in, a descriptive User-Agent, rate limits, retries, and a `fetch` command
 
-Next: Reddit search through the official API, joining series parts, a story library that skips repeats, narration with a stock voice (a voice cloned from your own recordings comes later), pictures from your `images/` folder, the video with captions, 1-minute parts, and one `run` command for the whole thing.
+Next: joining series parts, a story library that skips repeats, narration with a stock voice (a voice cloned from your own recordings comes later), pictures from your `images/` folder, the video with captions, 1-minute parts, and one `run` command for the whole thing.
 
 ## Setup
 
@@ -36,6 +37,21 @@ python -m unittest
 ```
 
 Needs Python 3.11+ and, for the video steps, [FFmpeg](https://ffmpeg.org/).
+
+### Reddit access
+
+Blueit reads posts through Reddit's official API, which needs a free app:
+
+1. Sign in to Reddit and open <https://www.reddit.com/prefs/apps>.
+2. Click **create another app**, choose **script**, and use `http://localhost:8080` as the redirect URI.
+3. Copy `.env.example` to `.env` and paste in the id (under the app's name) and the secret. `.env` is ignored by git.
+
+```
+python -m blueit fetch                      # saves listings/<subreddit>.json
+python -m blueit check listings/nosleep.json
+```
+
+Blueit signs in with application-only access: it can read public posts and nothing else. It waits when Reddit's rate limit runs out and retries busy responses with growing waits.
 
 ## Using other people's stories
 

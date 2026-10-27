@@ -1,4 +1,7 @@
-"""Command line: `python -m blueit check posts.json` explains which posts are finished stories."""
+"""Command line.
+  python -m blueit fetch              save the configured subreddits' posts to listings/*.json
+  python -m blueit check posts.json   explain which posts in a saved listing are finished stories
+"""
 from __future__ import annotations
 
 import argparse
@@ -9,6 +12,7 @@ from pathlib import Path
 from .clean import clean
 from .complete import check
 from .config import Config
+from .reddit import Credentials, Reddit, RedditError, load_env
 from .story import Story
 
 
@@ -31,6 +35,26 @@ def cmd_check(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_fetch(args, cfg: Config, reddit: Reddit | None = None) -> int:
+    try:
+        reddit = reddit or Reddit(Credentials.from_env(load_env(args.env)))
+    except RedditError as e:
+        print(e, file=sys.stderr)
+        return 2
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    for sub in cfg.subreddits:
+        listing = (reddit.search(sub, cfg.search, cfg.time_filter, cfg.limit) if cfg.search
+                   else reddit.top(sub, cfg.time_filter, cfg.limit))
+        children = [c for c in listing.get("data", {}).get("children", [])
+                    if c.get("kind") == "t3" and int(c["data"].get("score", 0)) >= cfg.min_score]
+        path = out / f"{sub}.json"
+        path.write_text(json.dumps({"kind": "Listing", "data": {"children": children}}, indent=1), encoding="utf-8")
+        finished = sum(check(Story.from_reddit(c["data"]), cfg.min_words, cfg.max_words, cfg.allow_nsfw).ok for c in children)
+        print(f"r/{sub}: {len(children)} posts, {finished} finished stories → {path}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="blueit", description="Finished Reddit stories to narrated videos.")
     parser.add_argument("--config", default="blueit.toml")
@@ -38,9 +62,12 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("check", help="say which posts in a saved Reddit JSON file are finished stories")
     c.add_argument("file")
     c.add_argument("--show", action="store_true", help="print the cleaned text of finished stories")
+    f = sub.add_parser("fetch", help="download posts from the subreddits in blueit.toml through Reddit's API")
+    f.add_argument("--out", default="listings", help="folder for the saved listings")
+    f.add_argument("--env", default=".env", help="file with REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET")
     args = parser.parse_args(argv)
     cfg = Config.load(args.config)
-    return {"check": cmd_check}[args.cmd](args, cfg)
+    return {"check": cmd_check, "fetch": cmd_fetch}[args.cmd](args, cfg)
 
 
 if __name__ == "__main__":
