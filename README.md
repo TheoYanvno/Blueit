@@ -24,8 +24,9 @@ Built one piece a day. Done so far:
 
 1. ✅ Finished-story check, text cleaning for narration, settings, `check` command and tests
 2. ✅ Reddit search through the official API: app-only sign-in, a descriptive User-Agent, rate limits, retries, and a `fetch` command
+3. ✅ Series joining: when `fetch` finds the final part of a finished series, it looks up the earlier parts in the author's own posts, puts them in order (part number, then date), checks each one, and saves the joined story with every part's link to `listings/<subreddit>.series.json`
 
-Next: joining series parts, a story library that skips repeats, narration with a stock voice (a voice cloned from your own recordings comes later), pictures from your `images/` folder, the video with captions, 1-minute parts, and one `run` command for the whole thing.
+Next: a story library that skips repeats, narration with a stock voice (a voice cloned from your own recordings comes later), pictures from your `images/` folder, the video with captions, 1-minute parts, and one `run` command for the whole thing.
 
 ## Setup
 

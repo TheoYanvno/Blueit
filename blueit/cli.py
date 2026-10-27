@@ -13,6 +13,7 @@ from .clean import clean
 from .complete import check
 from .config import Config
 from .reddit import Credentials, Reddit, RedditError, load_env
+from .series import find_and_join
 from .story import Story
 
 
@@ -50,8 +51,21 @@ def cmd_fetch(args, cfg: Config, reddit: Reddit | None = None) -> int:
                     if c.get("kind") == "t3" and int(c["data"].get("score", 0)) >= cfg.min_score]
         path = out / f"{sub}.json"
         path.write_text(json.dumps({"kind": "Listing", "data": {"children": children}}, indent=1), encoding="utf-8")
-        finished = sum(check(Story.from_reddit(c["data"]), cfg.min_words, cfg.max_words, cfg.allow_nsfw).ok for c in children)
-        print(f"r/{sub}: {len(children)} posts, {finished} finished stories → {path}")
+        finished, series = 0, []
+        for c in children:
+            story = Story.from_reddit(c["data"])
+            verdict = check(story, cfg.min_words, cfg.max_words, cfg.allow_nsfw)
+            finished += verdict.ok
+            if verdict.ok and verdict.final and verdict.reason.endswith("earlier parts are needed"):
+                result = find_and_join(reddit, story, min_words=cfg.min_words, allow_nsfw=cfg.allow_nsfw)
+                print(f"  series {story.title[:60]!r}: {result.reason}")
+                if result.ok:
+                    s = result.story
+                    series.append({"id": s.id, "title": s.title, "author": s.author, "subreddit": s.subreddit,
+                                   "words": s.words, "parts": list(s.parts), "body": s.body})
+        if series:
+            (out / f"{sub}.series.json").write_text(json.dumps(series, indent=1), encoding="utf-8")
+        print(f"r/{sub}: {len(children)} posts, {finished} finished stories, {len(series)} joined series → {path}")
     return 0
 
 

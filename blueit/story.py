@@ -18,6 +18,7 @@ class Story:
     over_18: bool = False
     removed: bool = False
     tags: tuple[str, ...] = field(default=())
+    parts: tuple[str, ...] = field(default=())  # links to every part when this story joins a series
 
     @property
     def words(self) -> int:

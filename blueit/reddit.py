@@ -170,6 +170,11 @@ class Reddit:
         return self.get(f"/r/{subreddit}/search", q=query, restrict_sr=1, sort=sort, t=time_filter,
                         limit=min(limit, 100), raw_json=1)
 
+    def submitted(self, user: str, limit: int = 100) -> list[Story]:
+        """A user's own posts, newest first (used to find the earlier parts of a series)."""
+        listing = self.get(f"/user/{user}/submitted", sort="new", limit=min(limit, 100), raw_json=1)
+        return [Story.from_reddit(c["data"]) for c in listing.get("data", {}).get("children", []) if c.get("kind") == "t3"]
+
     def stories(self, subreddit: str, query: str = "", time_filter: str = "month", limit: int = 25,
                 min_score: int = 0) -> list[Story]:
         listing = self.search(subreddit, query, time_filter, limit) if query else self.top(subreddit, time_filter, limit)
