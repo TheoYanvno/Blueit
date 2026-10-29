@@ -11,3 +11,4 @@ allow_nsfw = false
 output = "output"      # finished videos go here, one folder per story
 images = "images"      # your reference pictures go here
 clip_seconds = 60      # length of each part
+library = "library.db"  # every finished story fetch finds, so nothing is made twice

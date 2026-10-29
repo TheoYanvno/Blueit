@@ -119,7 +119,7 @@ class ThroughTheApi(unittest.TestCase):
                           post("p1", "The Well, Part 1", 100))
         r, _ = client(FakeReddit([("ok", top, {}), ("ok", history, {})]))
         with tempfile.TemporaryDirectory() as d:
-            args = SimpleNamespace(out=d, env="/nonexistent")
+            args = SimpleNamespace(out=d, env="/nonexistent", library=str(Path(d) / "library.db"))
             self.assertEqual(cmd_fetch(args, Config(subreddits=["nosleep"], min_score=100), reddit=r), 0)
             saved = json.loads((Path(d) / "nosleep.series.json").read_text())
         self.assertEqual(len(saved), 1)

@@ -149,7 +149,7 @@ class Stories(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             cfg = Config(subreddits=["nosleep", "LetsNotMeet"], min_score=100)
             r, _ = client(FakeReddit())
-            args = SimpleNamespace(out=d, env="/nonexistent")
+            args = SimpleNamespace(out=d, env="/nonexistent", library=str(Path(d) / "library.db"))
             self.assertEqual(cmd_fetch(args, cfg, reddit=r), 0)
             saved = json.loads((Path(d) / "nosleep.json").read_text())
             self.assertEqual(len(saved["data"]["children"]), 4, "a4 (score 50) is below the minimum")

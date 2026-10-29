@@ -22,6 +22,7 @@ class Config:
     output: Path = Path("output")
     images: Path = Path("images")
     clip_seconds: int = 60
+    library: Path = Path("library.db")  # the story library (SQLite)
 
     @classmethod
     def load(cls, path: str | Path = "blueit.toml") -> "Config":
@@ -30,7 +31,7 @@ class Config:
             return cls()
         data = tomllib.loads(p.read_text(encoding="utf-8"))
         known = {k: v for k, v in data.get("blueit", data).items() if k in cls.__dataclass_fields__}
-        for key in ("output", "images"):
+        for key in ("output", "images", "library"):
             if key in known:
                 known[key] = Path(known[key])
         return cls(**known)
