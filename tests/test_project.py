@@ -114,3 +114,34 @@ class VideoCommandTest(unittest.TestCase):
             self.assertTrue((folder / "captions.srt").read_text(encoding="utf-8").startswith("1\n00:00:00,000"))
             self.assertGreaterEqual(len(list(folder.glob("part-*.mp4"))), 2)
             self.assertIn("parts →", out.getvalue())
+
+
+@unittest.skipUnless(__import__("shutil").which("ffmpeg"), "FFmpeg isn't installed")
+class RunCommandTest(unittest.TestCase):
+    def test_run_makes_the_top_stories_in_order_and_stops_when_none_are_left(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            cfg = d / "blueit.toml"
+            cfg.write_text(f'[blueit]\noutput = "{(d / "out").as_posix()}"\nimages = "{(d / "images").as_posix()}"\n'
+                           'voice_engine = "silent"\nvideo_size = "240x426"\n', encoding="utf-8")
+            run = lambda *a: main(["--config", str(cfg), *a, "--library", str(d / "library.db")])
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as err:
+                self.assertEqual(run("run"), 2, "no pictures yet")
+            self.assertIn("No pictures found", err.getvalue())
+            (d / "images").mkdir()
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=olive:s=320x240", "-frames:v", "1",
+                            str(d / "images" / "a.png")], check=True)
+            with Library(d / "library.db") as lib:
+                lib.add(story("r1", "First", 900, body="The wind howled outside. " * 20))
+                lib.add(story("r2", "Second", 100, body="The candle went out. " * 20))
+            with contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(run("run", "--count", "3"), 0)
+            text = out.getvalue()
+            self.assertLess(text.index("'First'"), text.index("'Second'"))
+            self.assertIn("No more stories waiting.", text)
+            for folder in ("r1-first", "r2-second"):
+                self.assertTrue((d / "out" / folder / "full.mp4").exists())
+                self.assertTrue((d / "out" / folder / "part-01.mp4").exists())
+            with Library(d / "library.db") as lib:
+                self.assertEqual(lib.counts(), {"new": 0, "narrated": 2})

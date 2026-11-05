@@ -8,6 +8,8 @@
   python -m blueit narrate ID         read a library story aloud into output/<story>/narration.wav (--next: the
                                       highest-scored story not narrated yet)
   python -m blueit video ID           make output/<story>/full.mp4 and its 1-minute parts from the narration
+  python -m blueit run                the whole thing: (--fetch first), then narrate the top waiting story and make
+                                      its videos; --count N does N stories
 """
 from __future__ import annotations
 
@@ -177,6 +179,47 @@ def cmd_video(args, cfg: Config, runner=None) -> int:
     return 0
 
 
+def cmd_run(args, cfg: Config, voice=None, runner=None, reddit=None) -> int:
+    from .narrate import VoiceError, make_voice, narrate
+    from .pictures import PictureError, find_pictures
+    from .pipeline import make
+    from .project import folder_for, prepare
+    from .video import VideoError, ffmpeg_path
+    try:
+        if runner is None:
+            ffmpeg_path()                                   # say so now, not after a long narration
+        find_pictures(cfg.output / "_", cfg.images)
+        voice = voice or make_voice(args.voice or cfg.voice_engine, cfg.voice, cfg.voice_rate)
+    except (VideoError, PictureError, VoiceError) as e:
+        print(e, file=sys.stderr)
+        return 2
+    if args.fetch:
+        code = cmd_fetch(args, cfg, reddit)
+        if code:
+            return code
+    done = 0
+    with Library(_library_path(args, cfg)) as library:
+        for _ in range(max(1, args.count)):
+            waiting = library.find(status="new", limit=1)
+            if not waiting:
+                print("No more stories waiting." if done else "No story waiting. Run with --fetch, or `blueit ui`.")
+                break
+            entry = waiting[0]
+            print(f"[{done + 1}] {entry.title[:70]!r} (r/{entry.subreddit}, {entry.words} words)")
+            try:
+                folder = prepare(cfg.output, entry)
+                narrate((folder / "script.txt").read_text(encoding="utf-8"), voice, folder)
+                library.mark_narrated(entry.id)
+                made = make(folder_for(cfg.output, entry), cfg, runner=runner)
+            except (VoiceError, VideoError, PictureError) as e:
+                print(f"  stopped: {e}", file=sys.stderr)
+                return 2
+            m, sec = divmod(round(made.seconds), 60)
+            print(f"  done: {m} min {sec:02} s, {len(made.parts)} parts → {made.folder}")
+            done += 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="blueit", description="Finished Reddit stories to narrated videos.")
     parser.add_argument("--config", default="blueit.toml")
@@ -206,12 +249,19 @@ def main(argv: list[str] | None = None) -> int:
     n.add_argument("--voice", choices=["windows", "espeak", "silent"], help="override voice_engine in blueit.toml")
     v = sub.add_parser("video", help="make the full video and 1-minute parts for a narrated story")
     v.add_argument("id", help="the story's id, as `find` shows it")
-    for p in (f, s, m, u, n, v):
+    r = sub.add_parser("run", help="narrate the top waiting stories and make their videos (--fetch to search first)")
+    r.add_argument("--fetch", action="store_true", help="fetch new stories from the subreddits in blueit.toml first")
+    r.add_argument("--count", type=int, default=1, help="how many stories to make (default 1)")
+    r.add_argument("--voice", choices=["windows", "espeak", "silent"], help="override voice_engine in blueit.toml")
+    r.add_argument("--out", default="listings", help="folder for the saved listings (with --fetch)")
+    r.add_argument("--env", default=".env", help="file with REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET (with --fetch)")
+    for p in (f, s, m, u, n, v, r):
         p.add_argument("--library", help="the library file (default: library in blueit.toml, or library.db)")
     args = parser.parse_args(argv)
     cfg = Config.load(args.config)
     return {"check": cmd_check, "fetch": cmd_fetch, "find": cmd_find, "mark": cmd_mark, "ui": cmd_ui,
-            "narrate": cmd_narrate, "video": cmd_video}[args.cmd](args, cfg)
+            "narrate": cmd_narrate, "video": cmd_video,
+            "run": cmd_run}[args.cmd](args, cfg)
 
 
 def cmd_ui(args, cfg: Config) -> int:

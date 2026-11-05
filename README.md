@@ -39,7 +39,9 @@ Built one piece a day. Done so far:
 
 10. ✅ 1-minute parts: `full.mp4` is cut into `part-01.mp4`, `part-02.mp4`, … of at most `clip_seconds` each, only between sentences, with the captions kept, ready for Shorts, Reels and TikTok
 
-Next: a voice cloned from your own recordings (later), and one `run` command for the whole thing.
+11. ✅ One command for the whole thing: `run` checks FFmpeg, your pictures and the voice first, then (with `--fetch`) finds new stories, narrates the top waiting ones and makes their full videos and parts
+
+Next: a voice cloned from your own recordings (later).
 
 ## Setup
 
@@ -88,6 +90,13 @@ python -m blueit narrate --next --voice silent   # a quick preview with no sound
 ```
 
 Each story gets a folder in `output/`: `script.txt` (exactly what's read aloud), `credit.txt` (the author and links), `narration.wav` and `narration.json` (when every sentence is spoken, for captions). Pick the voice in `blueit.toml`: `voice_engine = "windows"` uses the voices that come with Windows (set `voice = "Zira"` or `"David"`, and `voice_rate` from -10 to 10); `"espeak"` uses [eSpeak NG](https://github.com/espeak-ng/espeak-ng). The story text is passed to the voice through a file, never on a command line, so nothing in a post can run as a command.
+
+### All at once
+
+```
+python -m blueit run --fetch                # find new stories, then narrate the top one and make its videos
+python -m blueit run --count 3              # the top 3 waiting stories, one after another
+```
 
 ### Make the video
 
