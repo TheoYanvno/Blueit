@@ -33,7 +33,9 @@ Built one piece a day. Done so far:
 
 7. ✅ Pictures: still images from `images/` (or from a story's own `output/<story>/images/`), each on screen for about `picture_seconds` and changing only between sentences, repeating in order or in a shuffle that stays the same for each story
 
-Next: a voice cloned from your own recordings (later), the video with captions, 1-minute parts, and one `run` command for the whole thing.
+8. ✅ Captions: every narrated sentence becomes short two-line captions timed to the voice, saved as a standard `captions.srt` file you can also upload to YouTube or TikTok
+
+Next: a voice cloned from your own recordings (later), the video, 1-minute parts, and one `run` command for the whole thing.
 
 ## Setup
 
