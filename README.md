@@ -35,7 +35,9 @@ Built one piece a day. Done so far:
 
 8. ✅ Captions: every narrated sentence becomes short two-line captions timed to the voice, saved as a standard `captions.srt` file you can also upload to YouTube or TikTok
 
-Next: a voice cloned from your own recordings (later), the video, 1-minute parts, and one `run` command for the whole thing.
+9. ✅ The video: FFmpeg shows the pictures in turn (filled to the frame and cropped, never stretched), plays the narration and burns in the captions, into `full.mp4` (upright 1080×1920 for phones by default, or widescreen), as H.264 and AAC that every site and phone plays
+
+Next: a voice cloned from your own recordings (later), 1-minute parts, and one `run` command for the whole thing.
 
 ## Setup
 

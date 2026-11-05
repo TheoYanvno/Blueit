@@ -24,6 +24,8 @@ class Config:
     images: Path = Path("images")
     clip_seconds: int = 60
     library: Path = Path("library.db")  # the story library (SQLite)
+    video_size: str = "1080x1920"  # upright for phones; "1920x1080" for widescreen
+    captions: bool = True          # burn the captions into the video
     picture_seconds: float = 8.0  # about how long each picture stays on screen
     shuffle_pictures: bool = False  # same shuffle every time for the same story
     voice_engine: str = field(default_factory=lambda: "windows" if platform.system() == "Windows" else "espeak")

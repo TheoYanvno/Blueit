@@ -21,7 +21,7 @@ class Caption:
         return "\n".join(self.lines)
 
 
-def wrap(text: str, max_chars: int = 32) -> list[str]:
+def wrap(text: str, max_chars: int = 24) -> list[str]:
     """Breaks text into lines of at most max_chars, between words (a single longer word gets its own line)."""
     lines, current = [], ""
     for word in text.split():
@@ -33,7 +33,7 @@ def wrap(text: str, max_chars: int = 32) -> list[str]:
     return lines + ([current] if current else [])
 
 
-def captions(segments, max_chars: int = 32, max_lines: int = 2) -> list[Caption]:
+def captions(segments, max_chars: int = 24, max_lines: int = 2) -> list[Caption]:
     out: list[Caption] = []
     for seg in segments:
         lines = wrap(seg.text, max_chars)
