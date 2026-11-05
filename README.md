@@ -29,7 +29,9 @@ Built one piece a day. Done so far:
 
 5. ✅ Pick stories from menus: `python -m blueit ui` opens a page in your browser where drop-down menus choose the kind of story (scary, paranormal, revenge, work, family drama, funny), one subreddit or all of them, how recent, how long, the minimum upvotes and how many posts to look at. Results are added to the library, and the Library tab searches it and marks stories narrated
 
-Next: narration with a stock voice (a voice cloned from your own recordings comes later), pictures from your `images/` folder, the video with captions, 1-minute parts, and one `run` command for the whole thing.
+6. ✅ Narration with a stock voice: `narrate` reads a story aloud with a voice built into Windows (or eSpeak NG elsewhere), in short pieces joined with natural pauses, starting with the title and the author's name, and saves when every piece is spoken. Each story gets its own folder with the script and a credit file
+
+Next: a voice cloned from your own recordings (later), pictures from your `images/` folder, the video with captions, 1-minute parts, and one `run` command for the whole thing.
 
 ## Setup
 
@@ -68,6 +70,16 @@ python -m blueit ui                         # opens http://localhost:8642 in you
 Choose **What kind of stories** (each kind is a short list of subreddits where people post whole stories, set in `blueit/categories.py`), then **Where** (all of them or one), **Posted in the**, **How long** (narration runs about 150 words a minute), **At least this many upvotes** and **Posts to look at**, and press **Find stories**. Finished stories go into the library; the **Library** tab lists them, searches them and marks them narrated. The page only answers on your own computer (localhost).
 
 Blueit signs in with application-only access: it can read public posts and nothing else. It waits when Reddit's rate limit runs out and retries busy responses with growing waits.
+
+### Narrate a story
+
+```
+python -m blueit narrate --next             # the highest-scored story that isn't narrated yet
+python -m blueit narrate 1abc23             # one story by id
+python -m blueit narrate --next --voice silent   # a quick preview with no sound
+```
+
+Each story gets a folder in `output/`: `script.txt` (exactly what's read aloud), `credit.txt` (the author and links), `narration.wav` and `narration.json` (when every sentence is spoken, for captions). Pick the voice in `blueit.toml`: `voice_engine = "windows"` uses the voices that come with Windows (set `voice = "Zira"` or `"David"`, and `voice_rate` from -10 to 10); `"espeak"` uses [eSpeak NG](https://github.com/espeak-ng/espeak-ng). The story text is passed to the voice through a file, never on a command line, so nothing in a post can run as a command.
 
 ## Using other people's stories
 

@@ -5,6 +5,8 @@
   python -m blueit find [words…]      search the library by words, --subreddit and --status
   python -m blueit mark ID            mark a library story as narrated (--new to undo)
   python -m blueit ui                 open a page in your browser to pick what stories to find from menus
+  python -m blueit narrate ID         read a library story aloud into output/<story>/narration.wav (--next: the
+                                      highest-scored story not narrated yet)
 """
 from __future__ import annotations
 
@@ -119,6 +121,40 @@ def cmd_mark(args, cfg: Config) -> int:
     return 0
 
 
+def _pick_story(library: Library, args):
+    if args.next:
+        waiting = library.find(status="new", limit=1)
+        return waiting[0] if waiting else None
+    return library.get(args.id)
+
+
+def cmd_narrate(args, cfg: Config, voice=None) -> int:
+    from .narrate import VoiceError, make_voice, narrate
+    from .project import prepare
+    if not args.id and not args.next:
+        print("Give a story id (see `blueit find`) or --next.", file=sys.stderr)
+        return 2
+    with Library(_library_path(args, cfg)) as library:
+        entry = _pick_story(library, args)
+        if entry is None:
+            print("No story waiting to be narrated." if args.next else f"No story with id {args.id!r} in the library.",
+                  file=sys.stderr)
+            return 1
+        try:
+            voice = voice or make_voice(args.voice or cfg.voice_engine, cfg.voice, cfg.voice_rate)
+            folder = prepare(cfg.output, entry)
+            print(f"Narrating {entry.title[:70]!r} ({entry.words} words) with the {voice.name} voice…")
+            n = narrate((folder / "script.txt").read_text(encoding="utf-8"), voice, folder,
+                        progress=lambda done, total: print(f"\r  {done}/{total} pieces", end="", flush=True))
+        except VoiceError as e:
+            print(f"\n{e}", file=sys.stderr)
+            return 2
+        library.mark_narrated(entry.id)
+    m, s = divmod(round(n.seconds), 60)
+    print(f"\nDone: {m} min {s:02} s → {n.audio}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="blueit", description="Finished Reddit stories to narrated videos.")
     parser.add_argument("--config", default="blueit.toml")
@@ -142,11 +178,16 @@ def main(argv: list[str] | None = None) -> int:
     u.add_argument("--out", default="listings", help="folder for the saved listings")
     u.add_argument("--env", default=".env", help="file with REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET")
     u.add_argument("--no-browser", action="store_true", help="don't open the browser")
-    for p in (f, s, m, u):
+    n = sub.add_parser("narrate", help="read a library story aloud with a stock voice")
+    n.add_argument("id", nargs="?", help="the story's id, as `find` shows it")
+    n.add_argument("--next", action="store_true", help="the highest-scored story that isn't narrated yet")
+    n.add_argument("--voice", choices=["windows", "espeak", "silent"], help="override voice_engine in blueit.toml")
+    for p in (f, s, m, u, n):
         p.add_argument("--library", help="the library file (default: library in blueit.toml, or library.db)")
     args = parser.parse_args(argv)
     cfg = Config.load(args.config)
-    return {"check": cmd_check, "fetch": cmd_fetch, "find": cmd_find, "mark": cmd_mark, "ui": cmd_ui}[args.cmd](args, cfg)
+    return {"check": cmd_check, "fetch": cmd_fetch, "find": cmd_find, "mark": cmd_mark, "ui": cmd_ui,
+            "narrate": cmd_narrate}[args.cmd](args, cfg)
 
 
 def cmd_ui(args, cfg: Config) -> int:
