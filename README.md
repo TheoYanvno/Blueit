@@ -43,6 +43,8 @@ Built one piece a day. Done so far:
 
 12. ✅ Make videos from the page: every story in `blueit ui` has a **Make video** button that narrates it (if it isn't yet) and makes its full video and parts in the background, one story at a time, with the progress shown at the top of the page
 
+13. ✅ `doctor`: checks Python, FFmpeg, the voice (it says a test line), your pictures, the Reddit keys, the library and the output folder, and says how to fix anything missing
+
 Next: a voice cloned from your own recordings (later).
 
 ## Setup
@@ -51,6 +53,7 @@ Next: a voice cloned from your own recordings (later).
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e .
 cp blueit.example.toml blueit.toml
+python -m blueit doctor      # checks everything below and says how to fix what's missing
 python -m unittest
 ```
 

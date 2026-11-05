@@ -8,6 +8,7 @@
   python -m blueit narrate ID         read a library story aloud into output/<story>/narration.wav (--next: the
                                       highest-scored story not narrated yet)
   python -m blueit video ID           make output/<story>/full.mp4 and its 1-minute parts from the narration
+  python -m blueit doctor             check FFmpeg, the voice, your pictures and Reddit keys, with how to fix each
   python -m blueit run                the whole thing: (--fetch first), then narrate the top waiting story and make
                                       its videos; --count N does N stories
 """
@@ -220,6 +221,14 @@ def cmd_run(args, cfg: Config, voice=None, runner=None, reddit=None) -> int:
     return 0
 
 
+def cmd_doctor(args, cfg: Config) -> int:
+    from dataclasses import replace
+    from .doctor import report, run_checks
+    checks = run_checks(replace(cfg, library=_library_path(args, cfg)), env=args.env)
+    print(report(checks))
+    return 0 if all(c.ok for c in checks) else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="blueit", description="Finished Reddit stories to narrated videos.")
     parser.add_argument("--config", default="blueit.toml")
@@ -255,13 +264,15 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--voice", choices=["windows", "espeak", "silent"], help="override voice_engine in blueit.toml")
     r.add_argument("--out", default="listings", help="folder for the saved listings (with --fetch)")
     r.add_argument("--env", default=".env", help="file with REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET (with --fetch)")
-    for p in (f, s, m, u, n, v, r):
+    dr = sub.add_parser("doctor", help="check that everything Blueit needs is set up")
+    dr.add_argument("--env", default=".env", help="file with REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET")
+    for p in (f, s, m, u, n, v, r, dr):
         p.add_argument("--library", help="the library file (default: library in blueit.toml, or library.db)")
     args = parser.parse_args(argv)
     cfg = Config.load(args.config)
     return {"check": cmd_check, "fetch": cmd_fetch, "find": cmd_find, "mark": cmd_mark, "ui": cmd_ui,
             "narrate": cmd_narrate, "video": cmd_video,
-            "run": cmd_run}[args.cmd](args, cfg)
+            "run": cmd_run, "doctor": cmd_doctor}[args.cmd](args, cfg)
 
 
 def cmd_ui(args, cfg: Config) -> int:
