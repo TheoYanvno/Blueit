@@ -86,6 +86,7 @@ def make_video(folder: Path, shots, size: str = "1080x1920", captions: bool = Tr
     r = runner(cmd, cwd=folder, capture_output=True, text=True)
     if r.returncode != 0:
         raise VideoError(f"FFmpeg couldn't make the video: {(r.stderr or '').strip()[-400:]}")
+    (folder / "shots.txt").unlink(missing_ok=True)
     return folder / "full.mp4"
 
 

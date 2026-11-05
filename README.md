@@ -18,34 +18,36 @@ It starts with scary and creepy stories (r/nosleep, r/LetsNotMeet, r/Glitch_in_t
 
 Run `python -m blueit check <saved listing.json>` to see which posts pass and why the others don't.
 
-## Status
+## Quick start
 
-Built one piece a day. Done so far:
+```
+python -m blueit doctor        # is everything set up?
+python -m blueit ui            # pick stories from menus, then press Make video on one
+python -m blueit run --fetch   # or do it all from the terminal
+```
 
+Each finished story ends up in `output/<story>/` as `full.mp4` plus `part-01.mp4`, `part-02.mp4`, …, with `captions.srt` and `credit.txt` next to them.
+
+## How it was built
+
+One piece at a time, each with its own tests:
 1. ✅ Finished-story check, text cleaning for narration, settings, `check` command and tests
 2. ✅ Reddit search through the official API: app-only sign-in, a descriptive User-Agent, rate limits, retries, and a `fetch` command
 3. ✅ Series joining: when `fetch` finds the final part of a finished series, it looks up the earlier parts in the author's own posts, puts them in order (part number, then date), checks each one, and saves the joined story with every part's link to `listings/<subreddit>.series.json`
 4. ✅ Story library: every finished story `fetch` finds (and every joined series) is saved once, by its Reddit id, in a SQLite file (`library.db`). Fetching it again refreshes its score and text but never resets it, so narrated stories stay narrated. `find` searches it by subreddit, words and status, and `mark` marks a story narrated
-
 5. ✅ Pick stories from menus: `python -m blueit ui` opens a page in your browser where drop-down menus choose the kind of story (scary, paranormal, revenge, work, family drama, funny), one subreddit or all of them, how recent, how long, the minimum upvotes and how many posts to look at. Results are added to the library, and the Library tab searches it and marks stories narrated
-
 6. ✅ Narration with a stock voice: `narrate` reads a story aloud with a voice built into Windows (or eSpeak NG elsewhere), in short pieces joined with natural pauses, starting with the title and the author's name, and saves when every piece is spoken. Each story gets its own folder with the script and a credit file
-
 7. ✅ Pictures: still images from `images/` (or from a story's own `output/<story>/images/`), each on screen for about `picture_seconds` and changing only between sentences, repeating in order or in a shuffle that stays the same for each story
-
 8. ✅ Captions: every narrated sentence becomes short two-line captions timed to the voice, saved as a standard `captions.srt` file you can also upload to YouTube or TikTok
-
 9. ✅ The video: FFmpeg shows the pictures in turn (filled to the frame and cropped, never stretched), plays the narration and burns in the captions, into `full.mp4` (upright 1080×1920 for phones by default, or widescreen), as H.264 and AAC that every site and phone plays
-
 10. ✅ 1-minute parts: `full.mp4` is cut into `part-01.mp4`, `part-02.mp4`, … of at most `clip_seconds` each, only between sentences, with the captions kept, ready for Shorts, Reels and TikTok
-
 11. ✅ One command for the whole thing: `run` checks FFmpeg, your pictures and the voice first, then (with `--fetch`) finds new stories, narrates the top waiting ones and makes their full videos and parts
-
 12. ✅ Make videos from the page: every story in `blueit ui` has a **Make video** button that narrates it (if it isn't yet) and makes its full video and parts in the background, one story at a time, with the progress shown at the top of the page
-
 13. ✅ `doctor`: checks Python, FFmpeg, the voice (it says a test line), your pictures, the Reddit keys, the library and the output folder, and says how to fix anything missing
 
-Next: a voice cloned from your own recordings (later).
+14. ✅ Version 1.0: the whole path from Reddit to finished videos works from the terminal or the page, with 113 tests (including real FFmpeg runs)
+
+Planned next: a narrator voice cloned from your own recordings, as another voice engine.
 
 ## Setup
 
@@ -110,6 +112,22 @@ python -m blueit video 1abc23               # captions.srt, full.mp4 and part-01
 ```
 
 Put your pictures in `images/` first (or in the story's own `output/<story>/images/`). Needs [FFmpeg](https://ffmpeg.org/download.html) (on Windows: `winget install ffmpeg`). Settings in `blueit.toml`: `video_size`, `captions`, `picture_seconds`, `shuffle_pictures` and `clip_seconds`.
+
+## Project layout
+
+| File | What it does |
+|---|---|
+| `blueit/reddit.py` | Reddit's official API: app-only sign-in, rate limits and retries |
+| `blueit/complete.py`, `series.py` | Is it a finished story? Joining the parts of a finished series |
+| `blueit/clean.py` | Turns Reddit Markdown into text that reads well aloud |
+| `blueit/library.py` | The SQLite story library |
+| `blueit/categories.py`, `web.py` | The menus page and its small local server |
+| `blueit/narrate.py` | Voices, pieces, pauses and timings |
+| `blueit/pictures.py`, `captions.py` | Which picture shows when, and the caption lines |
+| `blueit/video.py`, `parts.py` | FFmpeg: the full video and the 1-minute parts |
+| `blueit/project.py`, `pipeline.py` | Each story's folder, script and credit, and the steps in order |
+| `blueit/cli.py`, `doctor.py` | The commands, and the setup check |
+| `tests/` | `python -m unittest` |
 
 ## Using other people's stories
 
