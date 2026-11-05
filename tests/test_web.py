@@ -156,3 +156,41 @@ class Server(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(__import__("shutil").which("ffmpeg"), "FFmpeg isn't installed")
+class MakeVideo(unittest.TestCase):
+    def test_make_video_narrates_and_makes_the_videos_in_the_background_one_at_a_time(self):
+        import subprocess
+        from blueit.narrate import SilentVoice
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "images").mkdir()
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=maroon:s=320x240", "-frames:v", "1",
+                            str(d / "images" / "a.png")], check=True)
+            cfg = Config(output=d / "out", images=d / "images", video_size="240x426")
+            with Library(d / "library.db") as lib:
+                lib.add(story("w1", "The Visitor", 500, body="Someone knocked twice. " * 20))
+            app = App(cfg, d / "library.db", d, voice_factory=SilentVoice)
+            self.assertEqual(app.status(), {"state": "idle"})
+            with self.assertRaises(BadRequest):
+                app.make({"id": "nope"})
+            job = app.make({"id": "w1"}, wait=True)
+            self.assertEqual(job["state"], "done", job)
+            self.assertGreaterEqual(job["parts"], 1)
+            self.assertTrue((d / "out" / "w1-the-visitor" / "full.mp4").exists())
+            self.assertEqual(app.library({"status": "narrated"})["counts"]["narrated"], 1)
+            app.job = {"state": "running", "title": "Another"}
+            with self.assertRaisesRegex(BadRequest, "Already making"):
+                app.make({"id": "w1"})
+
+    def test_a_failure_is_shown_not_raised(self):
+        from blueit.narrate import SilentVoice
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            cfg = Config(output=d / "out", images=d / "no-pictures")
+            with Library(d / "library.db") as lib:
+                lib.add(story("w2", "No Pictures", 500, body="Quiet night. " * 20))
+            job = App(cfg, d / "library.db", d, voice_factory=SilentVoice).make({"id": "w2"}, wait=True)
+            self.assertEqual(job["state"], "error")
+            self.assertIn("No pictures found", job["error"])

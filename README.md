@@ -41,6 +41,8 @@ Built one piece a day. Done so far:
 
 11. ✅ One command for the whole thing: `run` checks FFmpeg, your pictures and the voice first, then (with `--fetch`) finds new stories, narrates the top waiting ones and makes their full videos and parts
 
+12. ✅ Make videos from the page: every story in `blueit ui` has a **Make video** button that narrates it (if it isn't yet) and makes its full video and parts in the background, one story at a time, with the progress shown at the top of the page
+
 Next: a voice cloned from your own recordings (later).
 
 ## Setup
@@ -77,7 +79,7 @@ python -m blueit mark 1abc23                # mark a story narrated (--new to un
 python -m blueit ui                         # opens http://localhost:8642 in your browser
 ```
 
-Choose **What kind of stories** (each kind is a short list of subreddits where people post whole stories, set in `blueit/categories.py`), then **Where** (all of them or one), **Posted in the**, **How long** (narration runs about 150 words a minute), **At least this many upvotes** and **Posts to look at**, and press **Find stories**. Finished stories go into the library; the **Library** tab lists them, searches them and marks them narrated. The page only answers on your own computer (localhost).
+Choose **What kind of stories** (each kind is a short list of subreddits where people post whole stories, set in `blueit/categories.py`), then **Where** (all of them or one), **Posted in the**, **How long** (narration runs about 150 words a minute), **At least this many upvotes** and **Posts to look at**, and press **Find stories**. Finished stories go into the library; the **Library** tab lists them, searches them and marks them narrated. Press **Make video** on any story to narrate it and make its videos without leaving the page; the progress shows at the top. The page only answers on your own computer (localhost).
 
 Blueit signs in with application-only access: it can read public posts and nothing else. It waits when Reddit's rate limit runs out and retries busy responses with growing waits.
 

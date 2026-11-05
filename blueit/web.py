@@ -5,7 +5,9 @@
 The menus choose the kind of story (scary, revenge, work…), one subreddit or all of that kind, how far
 back to look, how long the stories should be, the fewest upvotes and how many posts to look at. "Find
 stories" runs the same search as `blueit fetch` with those choices and shows the finished stories it
-found; the Library tab lists everything saved so far and marks stories narrated.
+found; the Library tab lists everything saved so far and marks stories narrated. "Make video" on any
+story narrates it (if it isn't yet) and makes its full video and 1-minute parts in the background, one
+story at a time, with the progress shown on the page.
 
 Only the Python standard library is used. The server listens on 127.0.0.1 only, answers only requests
 addressed to localhost (so a web page elsewhere can't reach it through DNS tricks), and only takes JSON
@@ -57,8 +59,13 @@ def _pick(params: dict, key: str, allowed, default):
 class App:
     """What the page can ask for, kept apart from HTTP so it can be tested directly."""
 
-    def __init__(self, cfg: Config, library: Path, out: Path = Path("listings"), reddit_factory=None, env=".env"):
+    def __init__(self, cfg: Config, library: Path, out: Path = Path("listings"), reddit_factory=None, env=".env",
+                 voice_factory=None, video_runner=None):
         self.cfg = cfg
+        self.voice_factory = voice_factory
+        self.video_runner = video_runner
+        self.job: dict = {"state": "idle"}
+        self.job_lock = threading.Lock()
         self.library_path = Path(library)
         self.out = Path(out)
         self.reddit_factory = reddit_factory or (lambda: Reddit(Credentials.from_env(load_env(env))))
@@ -137,6 +144,53 @@ class App:
             return {"story": _story(library.get(story_id))}
 
 
+    # ---- making videos in the background ----
+
+    def make(self, params: dict, wait: bool = False) -> dict:
+        story_id = str(params.get("id") or "")
+        with Library(self.library_path) as library:
+            entry = library.get(story_id)
+        if entry is None:
+            raise BadRequest(f"No story with id {story_id!r} in the library.")
+        with self.job_lock:
+            if self.job.get("state") == "running":
+                raise BadRequest(f"Already making {self.job['title']!r}. Wait for it to finish.")
+            self.job = {"state": "running", "id": entry.id, "title": entry.title, "step": "Starting", "done": 0, "total": 0}
+        worker = threading.Thread(target=self._make, args=(entry,), daemon=True)
+        worker.start()
+        if wait:
+            worker.join()
+        return self.status()
+
+    def status(self) -> dict:
+        with self.job_lock:
+            return dict(self.job)
+
+    def _set(self, **changes) -> None:
+        with self.job_lock:
+            self.job.update(changes)
+
+    def _make(self, entry: Entry) -> None:
+        from .narrate import make_voice, narrate
+        from .pipeline import make
+        from .project import prepare
+        try:
+            folder = prepare(self.cfg.output, entry)
+            if not (folder / "narration.json").exists():
+                voice = (self.voice_factory or (lambda: make_voice(self.cfg.voice_engine, self.cfg.voice, self.cfg.voice_rate)))()
+                self._set(step="Narrating")
+                narrate((folder / "script.txt").read_text(encoding="utf-8"), voice, folder,
+                        progress=lambda done, total: self._set(done=done, total=total))
+                with Library(self.library_path) as library:
+                    library.mark_narrated(entry.id)
+            self._set(step="Making the video", done=0, total=0)
+            made = make(folder, self.cfg, log=lambda line: self._set(step=line.strip()), runner=self.video_runner)
+            self._set(state="done", step="Done", folder=str(made.folder), parts=len(made.parts),
+                      minutes=round(made.seconds / 60, 1))
+        except Exception as e:                  # shown on the page; the server keeps running
+            self._set(state="error", step="Stopped", error=str(e))
+
+
 def make_handler(app: App, allowed_hosts: set[str]):
     class Handler(BaseHTTPRequestHandler):
         server_version = "blueit"
@@ -178,6 +232,8 @@ def make_handler(app: App, allowed_hosts: set[str]):
                     return self._json(HTTPStatus.OK, app.options())
                 if url.path == "/api/library":
                     return self._json(HTTPStatus.OK, app.library(params))
+                if url.path == "/api/job":
+                    return self._json(HTTPStatus.OK, app.status())
             except BadRequest as e:
                 return self._json(HTTPStatus.BAD_REQUEST, {"error": str(e)})
             self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
@@ -192,7 +248,7 @@ def make_handler(app: App, allowed_hosts: set[str]):
                 params = json.loads(self.rfile.read(size) or b"{}")
                 if not isinstance(params, dict):
                     raise BadRequest("Send a JSON object.")
-                route = {"/api/find": app.find, "/api/mark": app.mark}.get(urlparse(self.path).path)
+                route = {"/api/find": app.find, "/api/mark": app.mark, "/api/make": app.make}.get(urlparse(self.path).path)
                 if not route:
                     return self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
                 return self._json(HTTPStatus.OK, route(params))
@@ -254,12 +310,16 @@ PAGE = r"""<!doctype html>
   .meta { color: var(--muted); font-size: .85rem; margin-top: 2px; }
   .pill { display: inline-block; font-size: .72rem; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); margin-left: 6px; }
   .pill.narrated { color: var(--ok); border-color: var(--ok); }
+  .job { margin: 0 0 14px; padding: 10px 14px; border-radius: 10px; background: var(--panel); border: 1px solid var(--accent); }
+  .job.error { border-color: var(--bad); color: var(--bad); } .job.done { border-color: var(--ok); }
+  .buttons { display: flex; flex-direction: column; gap: 6px; }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <header><h1>Blueit</h1><p>Pick what stories to find, then narrate the ones you like.</p></header>
 <main>
+  <div class="job" id="job" role="status" hidden></div>
   <div class="tabs" role="tablist">
     <button role="tab" id="tabFind" aria-selected="true" aria-controls="find">Find stories</button>
     <button role="tab" id="tabLib" aria-selected="false" aria-controls="lib">Library</button>
@@ -331,8 +391,36 @@ function storyItem(s) {
     try { const { story } = await api('/api/mark', { id: s.id, status: s.status === 'new' ? 'narrated' : 'new' }); li.replaceWith(storyItem(story)); }
     catch (e) { button.disabled = false; alert(e.message); }
   });
-  li.append(body, button);
+  const make = Object.assign(document.createElement('button'), { className: 'primary', textContent: 'Make video' });
+  make.addEventListener('click', async () => {
+    make.disabled = true;
+    try { showJob(await api('/api/make', { id: s.id })); watchJob(); }
+    catch (e) { alert(e.message); } finally { make.disabled = false; }
+  });
+  const buttons = Object.assign(document.createElement('div'), { className: 'buttons' });
+  buttons.append(make, button);
+  li.append(body, buttons);
   return li;
+}
+
+function showJob(j) {
+  const box = $('job');
+  if (!j || j.state === 'idle') { box.hidden = true; return; }
+  box.hidden = false;
+  box.className = `job ${j.state}`;
+  const count = j.total ? ` (${j.done} of ${j.total} pieces)` : '';
+  box.textContent = j.state === 'running' ? `Making “${j.title}”: ${j.step}${count}…`
+    : j.state === 'done' ? `“${j.title}” is ready: about ${j.minutes} min, ${j.parts} ${j.parts === 1 ? 'part' : 'parts'}, in ${j.folder}`
+    : `“${j.title}” stopped: ${j.error}`;
+}
+let jobTimer;
+function watchJob() {
+  clearInterval(jobTimer);
+  jobTimer = setInterval(async () => {
+    const j = await api('/api/job');
+    showJob(j);
+    if (j.state !== 'running') { clearInterval(jobTimer); if (!$('lib').hidden) showLibrary(); }
+  }, 1500);
 }
 
 $('findForm').addEventListener('submit', async (e) => {
@@ -390,6 +478,9 @@ for (const [tab, panel] of [['tabFind', 'find'], ['tabLib', 'lib']]) {
   $('libKind').append(...OPTIONS.kinds.map((k) => new Option(k.label, k.id)));
   fillWhere();
   $('kind').addEventListener('change', fillWhere);
+  const j = await api('/api/job');
+  showJob(j);
+  if (j.state === 'running') watchJob();
 })();
 </script>
 </body>
