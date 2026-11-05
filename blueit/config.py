@@ -24,6 +24,8 @@ class Config:
     images: Path = Path("images")
     clip_seconds: int = 60
     library: Path = Path("library.db")  # the story library (SQLite)
+    picture_seconds: float = 8.0  # about how long each picture stays on screen
+    shuffle_pictures: bool = False  # same shuffle every time for the same story
     voice_engine: str = field(default_factory=lambda: "windows" if platform.system() == "Windows" else "espeak")
     voice: str = ""         # part of a voice's name ("David", "Zira") or an eSpeak voice ("en-us")
     voice_rate: int | None = None  # Windows: -10 to 10; eSpeak: words per minute

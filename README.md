@@ -31,7 +31,9 @@ Built one piece a day. Done so far:
 
 6. ✅ Narration with a stock voice: `narrate` reads a story aloud with a voice built into Windows (or eSpeak NG elsewhere), in short pieces joined with natural pauses, starting with the title and the author's name, and saves when every piece is spoken. Each story gets its own folder with the script and a credit file
 
-Next: a voice cloned from your own recordings (later), pictures from your `images/` folder, the video with captions, 1-minute parts, and one `run` command for the whole thing.
+7. ✅ Pictures: still images from `images/` (or from a story's own `output/<story>/images/`), each on screen for about `picture_seconds` and changing only between sentences, repeating in order or in a shuffle that stays the same for each story
+
+Next: a voice cloned from your own recordings (later), the video with captions, 1-minute parts, and one `run` command for the whole thing.
 
 ## Setup
 
