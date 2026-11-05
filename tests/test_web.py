@@ -1,0 +1,158 @@
+import http.client
+import json
+import tempfile
+import threading
+import unittest
+from pathlib import Path
+
+from blueit.categories import STORY_TYPES, subreddits_for
+from blueit.config import Config
+from blueit.library import Library
+from blueit.reddit import MissingCredentials
+from blueit.web import App, BadRequest, make_server
+
+from .test_reddit import FakeReddit, client
+from .test_series import listing, post, story
+
+LONG = " ".join(["the hallway lights flickered once and then the footsteps stopped right outside"] * 200)  # 2,400 words
+
+
+class Menus(unittest.TestCase):
+    def test_every_kind_lists_its_subreddits_and_one_can_be_picked(self):
+        for kind, v in STORY_TYPES.items():
+            self.assertTrue(v["label"] and v["subreddits"], kind)
+            self.assertEqual(subreddits_for(kind), v["subreddits"])
+        self.assertEqual(subreddits_for("scary", "r/NOSLEEP"), ["nosleep"])
+        with self.assertRaises(ValueError):
+            subreddits_for("scary", "ProRevenge")          # a subreddit from another kind
+        with self.assertRaises(ValueError):
+            subreddits_for("cooking")
+
+
+class Finding(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.db = Path(self.dir.name) / "library.db"
+        self.calls = []
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def app(self, script):
+        def factory():
+            r, _ = client(FakeReddit(script))
+            self.reddit = r
+            return r
+        return App(Config(), self.db, Path(self.dir.name) / "listings", reddit_factory=factory)
+
+    def test_finds_stories_in_the_chosen_subreddit_with_the_chosen_settings(self):
+        app = self.app([("ok", listing(post("a1", "The night ranger", 500), post("a2", "The long hallway", 600, body=LONG)), {})])
+        out = app.find({"kind": "scary", "subreddit": "nosleep", "time": "week", "length": "medium", "minScore": 0, "limit": 10})
+        self.assertTrue(out["ok"])
+        self.assertEqual([s["id"] for s in out["stories"]], ["a2"], "the 480-word story is too short for medium")
+        s = out["stories"][0]
+        self.assertEqual((s["subreddit"], s["minutes"], s["status"]), ("nosleep", 16, "new"))
+        req = [r for r in self.reddit_requests() if "/top" in r.full_url][0]
+        self.assertIn("/r/nosleep/top", req.full_url)
+        self.assertIn("t=week", req.full_url)
+        self.assertIn("limit=10", req.full_url)
+
+    def reddit_requests(self):
+        return self.reddit.opener.requests
+
+    def test_words_turn_it_into_a_search_and_all_places_of_a_kind_are_searched(self):
+        script = [("ok", listing(post(f"r{i}", f"Story {i}", 100 + i, sub=sub)), {})
+                  for i, sub in enumerate(STORY_TYPES["revenge"]["subreddits"])]
+        app = self.app(script)
+        out = app.find({"kind": "revenge", "words": "  neighbor   fence ", "minScore": 0})
+        self.assertEqual(len(out["stories"]), len(STORY_TYPES["revenge"]["subreddits"]))
+        urls = [r.full_url for r in self.reddit_requests() if "/search" in r.full_url]
+        self.assertEqual(len(urls), 3)
+        self.assertIn("q=neighbor+fence", urls[0])
+        self.assertEqual(len(out["log"]), 3)
+
+    def test_found_stories_are_saved_once_to_the_library(self):
+        for _ in range(2):
+            app = self.app([("ok", listing(post("a1", "The night ranger", 500)), {})])
+            app.find({"kind": "scary", "subreddit": "nosleep", "minScore": 0})
+        with Library(self.db) as lib:
+            self.assertEqual([e.id for e in lib.find()], ["a1"])
+
+    def test_choices_outside_the_menus_are_refused(self):
+        app = self.app([])
+        for bad in [{"kind": "cooking"}, {"kind": "scary", "time": "decade"}, {"kind": "scary", "length": "huge"},
+                    {"kind": "scary", "minScore": "7"}, {"kind": "scary", "limit": "lots"}, {"kind": "scary", "subreddit": "tifu"}]:
+            with self.assertRaises(BadRequest, msg=bad):
+                app.find(bad)
+
+    def test_missing_reddit_keys_explain_how_to_set_up(self):
+        def factory():
+            raise MissingCredentials()
+        app = App(Config(), self.db, Path(self.dir.name), reddit_factory=factory)
+        out = app.find({"kind": "scary"})
+        self.assertFalse(out["ok"])
+        self.assertIn("reddit.com/prefs/apps", out["error"])
+
+    def test_library_filters_by_status_and_kind_and_marks_stories(self):
+        with Library(self.db) as lib:
+            lib.add(story("n1", "Cabin", 100))
+            lib.add(story("p1", "Fence", 200, sub="ProRevenge"))
+        app = self.app([])
+        self.assertEqual({s["id"] for s in app.library({})["stories"]}, {"n1", "p1"})
+        self.assertEqual([s["id"] for s in app.library({"kind": "revenge"})["stories"]], ["p1"])
+        app.mark({"id": "n1", "status": "narrated"})
+        self.assertEqual([s["id"] for s in app.library({"status": "narrated"})["stories"]], ["n1"])
+        self.assertEqual(app.library({})["counts"], {"new": 1, "narrated": 1})
+        with self.assertRaises(BadRequest):
+            app.mark({"id": "nope"})
+
+
+class Server(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        r, _ = client(FakeReddit([("ok", listing(post("a1", "The night ranger", 500)), {})]))
+        app = App(Config(), Path(self.dir.name) / "library.db", Path(self.dir.name), reddit_factory=lambda: r)
+        self.server = make_server(app, port=0)
+        self.port = self.server.server_address[1]
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.dir.cleanup()
+
+    def request(self, method, path, body=None, headers=None):
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        h = {"Host": f"127.0.0.1:{self.port}", **(headers or {})}
+        conn.request(method, path, body=body, headers=h)
+        res = conn.getresponse()
+        data = res.read()
+        conn.close()
+        return res.status, res.getheader("Content-Type"), data
+
+    def test_page_has_the_menus(self):
+        status, kind, body = self.request("GET", "/")
+        self.assertEqual(status, 200)
+        self.assertIn("text/html", kind)
+        for menu in ["kind", "subreddit", "time", "length", "minScore", "limit"]:
+            self.assertIn(f'<select id="{menu}"', body.decode())
+
+    def test_options_and_a_search_over_http(self):
+        status, _, body = self.request("GET", "/api/options")
+        opts = json.loads(body)
+        self.assertEqual(status, 200)
+        self.assertEqual([k["id"] for k in opts["kinds"]], list(STORY_TYPES))
+        status, _, body = self.request("POST", "/api/find", json.dumps({"kind": "scary", "subreddit": "nosleep", "minScore": 0}),
+                                       {"Content-Type": "application/json"})
+        self.assertEqual(status, 200)
+        self.assertEqual([s["id"] for s in json.loads(body)["stories"]], ["a1"])
+
+    def test_requests_for_other_hosts_and_non_json_posts_are_refused(self):
+        self.assertEqual(self.request("GET", "/api/options", headers={"Host": "evil.example"})[0], 403)
+        self.assertEqual(self.request("POST", "/api/find", "kind=scary", {"Content-Type": "application/x-www-form-urlencoded"})[0], 415)
+        self.assertEqual(self.request("POST", "/api/find", json.dumps({"kind": "cooking"}), {"Content-Type": "application/json"})[0], 400)
+        self.assertEqual(self.request("GET", "/nope")[0], 404)
+
+
+if __name__ == "__main__":
+    unittest.main()
