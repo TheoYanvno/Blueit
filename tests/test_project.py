@@ -87,3 +87,30 @@ class NarrateCommandTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(__import__("shutil").which("ffmpeg"), "FFmpeg isn't installed")
+class VideoCommandTest(unittest.TestCase):
+    def test_narrate_then_video_makes_the_full_video_captions_and_parts(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "images").mkdir()
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=teal:s=320x240", "-frames:v", "1",
+                            str(d / "images" / "a.png")], check=True)
+            cfg = d / "blueit.toml"
+            cfg.write_text(f'[blueit]\noutput = "{(d / "out").as_posix()}"\nimages = "{(d / "images").as_posix()}"\n'
+                           'voice_engine = "silent"\nvideo_size = "240x426"\nclip_seconds = 20\n', encoding="utf-8")
+            with Library(d / "library.db") as lib:
+                lib.add(story("v1", "Short one", 10, body="It was late and the road was empty. " * 15))
+            run = lambda *a: main(["--config", str(cfg), *a, "--library", str(d / "library.db")])
+            with contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(run("video", "v1"), 2, "no narration yet")
+                self.assertEqual(run("narrate", "v1"), 0)
+                self.assertEqual(run("video", "v1"), 0)
+                self.assertEqual(run("video", "zz"), 1)
+            folder = d / "out" / "v1-short-one"
+            self.assertTrue((folder / "full.mp4").exists())
+            self.assertTrue((folder / "captions.srt").read_text(encoding="utf-8").startswith("1\n00:00:00,000"))
+            self.assertGreaterEqual(len(list(folder.glob("part-*.mp4"))), 2)
+            self.assertIn("parts →", out.getvalue())

@@ -7,6 +7,7 @@
   python -m blueit ui                 open a page in your browser to pick what stories to find from menus
   python -m blueit narrate ID         read a library story aloud into output/<story>/narration.wav (--next: the
                                       highest-scored story not narrated yet)
+  python -m blueit video ID           make output/<story>/full.mp4 and its 1-minute parts from the narration
 """
 from __future__ import annotations
 
@@ -155,6 +156,27 @@ def cmd_narrate(args, cfg: Config, voice=None) -> int:
     return 0
 
 
+def cmd_video(args, cfg: Config, runner=None) -> int:
+    from .pictures import PictureError
+    from .pipeline import make
+    from .project import folder_for
+    from .video import VideoError
+    with Library(_library_path(args, cfg)) as library:
+        entry = library.get(args.id)
+    if entry is None:
+        print(f"No story with id {args.id!r} in the library.", file=sys.stderr)
+        return 1
+    print(f"Making the video for {entry.title[:70]!r}…")
+    try:
+        made = make(folder_for(cfg.output, entry), cfg, runner=runner)
+    except (VideoError, PictureError) as e:
+        print(e, file=sys.stderr)
+        return 2
+    m, s = divmod(round(made.seconds), 60)
+    print(f"Done: {m} min {s:02} s, {len(made.parts)} parts → {made.folder}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="blueit", description="Finished Reddit stories to narrated videos.")
     parser.add_argument("--config", default="blueit.toml")
@@ -182,12 +204,14 @@ def main(argv: list[str] | None = None) -> int:
     n.add_argument("id", nargs="?", help="the story's id, as `find` shows it")
     n.add_argument("--next", action="store_true", help="the highest-scored story that isn't narrated yet")
     n.add_argument("--voice", choices=["windows", "espeak", "silent"], help="override voice_engine in blueit.toml")
-    for p in (f, s, m, u, n):
+    v = sub.add_parser("video", help="make the full video and 1-minute parts for a narrated story")
+    v.add_argument("id", help="the story's id, as `find` shows it")
+    for p in (f, s, m, u, n, v):
         p.add_argument("--library", help="the library file (default: library in blueit.toml, or library.db)")
     args = parser.parse_args(argv)
     cfg = Config.load(args.config)
     return {"check": cmd_check, "fetch": cmd_fetch, "find": cmd_find, "mark": cmd_mark, "ui": cmd_ui,
-            "narrate": cmd_narrate}[args.cmd](args, cfg)
+            "narrate": cmd_narrate, "video": cmd_video}[args.cmd](args, cfg)
 
 
 def cmd_ui(args, cfg: Config) -> int:

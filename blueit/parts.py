@@ -25,7 +25,8 @@ def cut_points(segments, clip_seconds: float = 60) -> list[tuple[float, float]]:
         end = fits[-1] if fits else next(s.end for s in segments if s.end > start)   # one very long piece
         parts.append((round(start, 3), round(end, 3)))
         start = end
-    parts.append((round(start, 3), round(total, 3)))
+    if total - start > 0.01:
+        parts.append((round(start, 3), round(total, 3)))
     return parts
 
 

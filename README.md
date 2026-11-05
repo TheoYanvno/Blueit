@@ -89,6 +89,14 @@ python -m blueit narrate --next --voice silent   # a quick preview with no sound
 
 Each story gets a folder in `output/`: `script.txt` (exactly what's read aloud), `credit.txt` (the author and links), `narration.wav` and `narration.json` (when every sentence is spoken, for captions). Pick the voice in `blueit.toml`: `voice_engine = "windows"` uses the voices that come with Windows (set `voice = "Zira"` or `"David"`, and `voice_rate` from -10 to 10); `"espeak"` uses [eSpeak NG](https://github.com/espeak-ng/espeak-ng). The story text is passed to the voice through a file, never on a command line, so nothing in a post can run as a command.
 
+### Make the video
+
+```
+python -m blueit video 1abc23               # captions.srt, full.mp4 and part-01.mp4, part-02.mp4, … for a narrated story
+```
+
+Put your pictures in `images/` first (or in the story's own `output/<story>/images/`). Needs [FFmpeg](https://ffmpeg.org/download.html) (on Windows: `winget install ffmpeg`). Settings in `blueit.toml`: `video_size`, `captions`, `picture_seconds`, `shuffle_pictures` and `clip_seconds`.
+
 ## Using other people's stories
 
 Reddit posts belong to the people who wrote them, and Reddit's API terms apply to anything fetched through it. Blueit keeps each story's author and link with the video so you can credit them. Ask the author before posting a video of their story publicly; many story writers say yes when asked.

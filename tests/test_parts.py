@@ -42,6 +42,11 @@ class CutPointsTest(unittest.TestCase):
         self.assertEqual(parts[0], (0.0, 5.0))
         self.assertEqual(parts[1], (5.0, 85.5))
 
+    def test_a_long_last_piece_does_not_leave_an_empty_part(self):
+        parts = cut_points(segs(3, 25, 22), 20)
+        self.assertTrue(all(b > a for a, b in parts))
+        self.assertEqual(parts[-1][1], segs(3, 25, 22)[-1].end)
+
     def test_names_and_bad_input(self):
         self.assertEqual(part_name(3), "part-03.mp4")
         self.assertEqual(cut_points([], 60), [])
