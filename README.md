@@ -37,7 +37,9 @@ Built one piece a day. Done so far:
 
 9. ✅ The video: FFmpeg shows the pictures in turn (filled to the frame and cropped, never stretched), plays the narration and burns in the captions, into `full.mp4` (upright 1080×1920 for phones by default, or widescreen), as H.264 and AAC that every site and phone plays
 
-Next: a voice cloned from your own recordings (later), 1-minute parts, and one `run` command for the whole thing.
+10. ✅ 1-minute parts: `full.mp4` is cut into `part-01.mp4`, `part-02.mp4`, … of at most `clip_seconds` each, only between sentences, with the captions kept, ready for Shorts, Reels and TikTok
+
+Next: a voice cloned from your own recordings (later), and one `run` command for the whole thing.
 
 ## Setup
 
