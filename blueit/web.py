@@ -29,6 +29,12 @@ from .config import Config
 from .library import STATUSES, Entry, Library
 from .reddit import Credentials, Reddit, RedditError, load_env
 
+STATIC = Path(__file__).parent / "static"          # the React app, built by `npm run build` in ui/
+MEDIA_TYPES = {".mp4": "video/mp4", ".srt": "text/plain; charset=utf-8", ".txt": "text/plain; charset=utf-8",
+               ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+                ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon"}
+
 WORDS_PER_MINUTE = 150
 
 
@@ -68,6 +74,7 @@ class App:
         self.job_lock = threading.Lock()
         self.library_path = Path(library)
         self.out = Path(out)
+        self.env = env
         self.reddit_factory = reddit_factory or (lambda: Reddit(Credentials.from_env(load_env(env))))
         self.busy = threading.Lock()          # one search at a time keeps within Reddit's rate limits
 
@@ -162,6 +169,42 @@ class App:
             worker.join()
         return self.status()
 
+    # ---- one story in full, the setup checks and the settings, for the React app ----
+
+    def story(self, params: dict) -> dict:
+        from .project import folder_for
+        story_id = str(params.get("id") or "")
+        with Library(self.library_path) as library:
+            entry = library.get(story_id)
+        if entry is None:
+            raise BadRequest(f"No story with id {story_id!r} in the library.")
+        folder = folder_for(self.cfg.output, entry)
+        files = sorted(p.name for p in folder.iterdir() if p.is_file() and p.suffix.lower() in MEDIA_TYPES) if folder.is_dir() else []
+        videos = [f for f in files if f.endswith(".mp4")]
+        return {"story": {**_story(entry), "body": entry.body, "added_at": entry.added_at, "narrated_at": entry.narrated_at},
+                "folder": folder.name, "files": files,
+                "full": "full.mp4" if "full.mp4" in videos else None,
+                "parts": [f for f in videos if f.startswith("part-")]}
+
+    def doctor(self) -> dict:
+        from .doctor import run_checks
+        checks = run_checks(self.cfg, env=self.env, voice_factory=self.voice_factory)
+        return {"ok": all(c.ok for c in checks), "checks": [{"name": c.name, "ok": c.ok, "detail": c.detail} for c in checks]}
+
+    def settings(self) -> dict:
+        from dataclasses import asdict
+        return {"settings": {k: (str(v) if isinstance(v, Path) else v) for k, v in asdict(self.cfg).items()}}
+
+    def media_path(self, folder: str, name: str) -> Path:
+        """A file inside one story's output folder; anything that tries to step outside it is refused."""
+        root = Path(self.cfg.output).resolve()
+        path = (root / folder / name).resolve()
+        if root not in path.parents or path.parent.parent != root or path.suffix.lower() not in MEDIA_TYPES:
+            raise BadRequest("Not a story file.")
+        if not path.is_file():
+            raise BadRequest("That file hasn't been made yet.")
+        return path
+
     def status(self) -> dict:
         with self.job_lock:
             return dict(self.job)
@@ -205,13 +248,23 @@ def make_handler(app: App, allowed_hosts: set[str]):
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Security-Policy",
-                             "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; "
-                             "connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'")
+                             "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+                             "connect-src 'self'; img-src 'self' data:; media-src 'self'; frame-ancestors 'none'")
             self.end_headers()
             self.wfile.write(body)
 
         def _json(self, status: int, data: dict):
             self._send(status, json.dumps(data).encode(), "application/json; charset=utf-8")
+
+        def _static(self, path: str):
+            """The React app when it's built, otherwise the original single page."""
+            index = STATIC / "index.html"
+            if not index.is_file():
+                return self._send(HTTPStatus.OK, PAGE.encode(), "text/html; charset=utf-8")
+            target = index if path == "/" else (STATIC / path.lstrip("/")).resolve()
+            if STATIC.resolve() not in target.parents or not target.is_file() or target.suffix not in STATIC_TYPES:
+                return self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
+            return self._send(HTTPStatus.OK, target.read_bytes(), STATIC_TYPES[target.suffix])
 
         def _host_ok(self) -> bool:
             host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
@@ -226,8 +279,20 @@ def make_handler(app: App, allowed_hosts: set[str]):
             url = urlparse(self.path)
             params = {k: v[-1] for k, v in parse_qs(url.query).items()}
             try:
-                if url.path == "/":
-                    return self._send(HTTPStatus.OK, PAGE.encode(), "text/html; charset=utf-8")
+                if url.path == "/" or (url.path.startswith("/assets/") and STATIC.is_dir()):
+                    return self._static(url.path)
+                if url.path == "/api/story":
+                    return self._json(HTTPStatus.OK, app.story(params))
+                if url.path == "/api/doctor":
+                    return self._json(HTTPStatus.OK, app.doctor())
+                if url.path == "/api/settings":
+                    return self._json(HTTPStatus.OK, app.settings())
+                if url.path.startswith("/media/"):
+                    parts = url.path.split("/")
+                    if len(parts) != 4:
+                        raise BadRequest("Not a story file.")
+                    path = app.media_path(parts[2], parts[3])
+                    return self._send(HTTPStatus.OK, path.read_bytes(), MEDIA_TYPES[path.suffix.lower()])
                 if url.path == "/api/options":
                     return self._json(HTTPStatus.OK, app.options())
                 if url.path == "/api/library":

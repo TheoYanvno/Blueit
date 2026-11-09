@@ -194,3 +194,49 @@ class MakeVideo(unittest.TestCase):
             job = App(cfg, d / "library.db", d, voice_factory=SilentVoice).make({"id": "w2"}, wait=True)
             self.assertEqual(job["state"], "error")
             self.assertIn("No pictures found", job["error"])
+
+
+class ReactApi(unittest.TestCase):
+    """The endpoints the React interface uses: one story in full, its files, the setup checks and settings."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        d = Path(self.dir.name)
+        self.cfg = Config(output=d / "out", images=d / "images")
+        with Library(d / "library.db") as lib:
+            lib.add(story("s1", "The Visitor", 500, body="Someone knocked twice. " * 20))
+        self.app = App(self.cfg, d / "library.db", d)
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def test_story_shows_the_text_and_lists_made_files(self):
+        data = self.app.story({"id": "s1"})
+        self.assertEqual(data["story"]["title"], "The Visitor")
+        self.assertIn("knocked twice", data["story"]["body"])
+        self.assertEqual((data["files"], data["full"], data["parts"]), ([], None, []))
+        folder = self.cfg.output / data["folder"]
+        folder.mkdir(parents=True)
+        for name in ("full.mp4", "part-01.mp4", "part-02.mp4", "captions.srt", "notes.exe"):
+            (folder / name).write_bytes(b"x")
+        data = self.app.story({"id": "s1"})
+        self.assertEqual(data["full"], "full.mp4")
+        self.assertEqual(data["parts"], ["part-01.mp4", "part-02.mp4"])
+        self.assertNotIn("notes.exe", data["files"])
+        with self.assertRaises(BadRequest):
+            self.app.story({"id": "missing"})
+
+    def test_media_paths_stay_inside_a_story_folder(self):
+        folder = self.app.story({"id": "s1"})["folder"]
+        (self.cfg.output / folder).mkdir(parents=True)
+        (self.cfg.output / folder / "full.mp4").write_bytes(b"x")
+        self.assertTrue(self.app.media_path(folder, "full.mp4").is_file())
+        for bad in [("..", "library.db"), (folder, "../../library.db"), (folder, "nope.mp4"), (folder, "script.py")]:
+            with self.assertRaises(BadRequest, msg=bad):
+                self.app.media_path(*bad)
+
+    def test_doctor_and_settings_come_back_as_json(self):
+        checks = self.app.doctor()
+        self.assertIn("ok", checks)
+        self.assertTrue(all({"name", "ok", "detail"} <= set(c) for c in checks["checks"]))
+        self.assertEqual(self.app.settings()["settings"]["output"], str(self.cfg.output))
