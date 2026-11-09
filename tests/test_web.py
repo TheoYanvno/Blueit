@@ -130,10 +130,23 @@ class Server(unittest.TestCase):
         conn.close()
         return res.status, res.getheader("Content-Type"), data
 
-    def test_page_has_the_menus(self):
+    def test_page_is_the_react_app_and_its_assets_are_served(self):
         status, kind, body = self.request("GET", "/")
         self.assertEqual(status, 200)
         self.assertIn("text/html", kind)
+        self.assertIn('<script src="/assets/app.js">', body.decode())
+        status, kind, body = self.request("GET", "/assets/app.js")
+        self.assertEqual((status, kind.split(";")[0]), (200, "text/javascript"))
+        self.assertIn(b"/api/options", body)
+        for bad in ["/assets/../web.py", "/assets/nope.js"]:
+            self.assertEqual(self.request("GET", bad)[0], 404, bad)
+
+    def test_the_old_page_is_used_when_the_app_is_not_built(self):
+        from unittest import mock
+        import blueit.web as web
+        with mock.patch.object(web, "STATIC", Path(self.dir.name) / "no-build"):
+            status, _, body = self.request("GET", "/")
+        self.assertEqual(status, 200)
         for menu in ["kind", "subreddit", "time", "length", "minScore", "limit"]:
             self.assertIn(f'<select id="{menu}"', body.decode())
 

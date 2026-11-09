@@ -1,0 +1,21 @@
+:root { --bg:#0f1420; --panel:#171e2e; --line:#2a3448; --text:#e6e9f0; --muted:#94a0b8; --accent:#4f8cff; --ok:#3fb67b; --bad:#ff7a7a; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display:flex; align-items:center; gap:16px; padding:14px 20px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+header h1 { font-size:1.25rem; margin:0; }
+nav { display:flex; gap:6px; flex-wrap:wrap; }
+nav button[aria-current="page"] { border-color:var(--accent); color:var(--accent); }
+main { max-width:1000px; margin:0 auto; padding:20px 16px 60px; }
+button, select, input { font:inherit; color:inherit; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:7px 12px; }
+button { cursor:pointer; } button:hover { border-color:var(--accent); } button:disabled { opacity:.5; cursor:default; }
+button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+.muted { color:var(--muted); } .error { color:var(--bad); }
+.filters { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:12px; align-items:end; margin:14px 0; }
+.filters label { display:flex; flex-direction:column; gap:4px; font-size:.85rem; color:var(--muted); }
+.stories { list-style:none; padding:0; display:flex; flex-direction:column; gap:10px; }
+.story { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; display:flex; justify-content:space-between; gap:12px; align-items:center; }
+.story h3 { margin:0 0 4px; font-size:1rem; } .story .meta { font-size:.85rem; color:var(--muted); }
+.pill { font-size:.75rem; padding:2px 8px; border-radius:999px; border:1px solid var(--line); }
+.pill.narrated { border-color:var(--ok); color:var(--ok); }
+.row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; } pre { white-space:pre-wrap; background:#0b0f18; padding:10px; border-radius:8px; }
