@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import Find from './pages/Find.jsx';
+import Library from './pages/Library.jsx';
+import JobBar from './JobBar.jsx';
 
-const PAGES = [['find', 'Find stories']];
+const PAGES = [['find', 'Find stories'], ['library', 'Library']];
 
 export default function App() {
   const [page, setPage] = useState('find');
+  const [nudge, setNudge] = useState(0);         // bump to make the job bar check again
   return (
     <>
       <header>
@@ -15,7 +18,11 @@ export default function App() {
           ))}
         </nav>
       </header>
-      <main>{page === 'find' && <Find />}</main>
+      <JobBar nudge={nudge} />
+      <main>
+        {page === 'find' && <Find />}
+        {page === 'library' && <Library />}
+      </main>
     </>
   );
 }
