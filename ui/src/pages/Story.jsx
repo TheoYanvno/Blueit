@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, get } from '../api.js';
+import ShareYouTube from '../ShareYouTube.jsx';
 
 // One story: its text, a Make video button that starts the narration and video in the background,
 // and players for the full video and each 1-minute part once they're made.
@@ -64,7 +65,9 @@ export default function Story({ id, onBack, onStarted, nudge }) {
             ))}
           </ul>
         </div>
-      ) : <p className="muted">No video yet. Press Make video: the narration and video are made in the background, and the bar at the top shows how far along it is.</p>}
+      ) : null}
+      {videos.length > 0 && <ShareYouTube storyId={s.id} videos={videos} current={playing} />}
+      {videos.length > 0 ? null : <p className="muted">No video yet. Press Make video: the narration and video are made in the background, and the bar at the top shows how far along it is.</p>}
 
       {data.files.some(f => !f.endsWith('.mp4')) && (
         <p className="muted small">Other files: {data.files.filter(f => !f.endsWith('.mp4')).map(f => (

@@ -46,6 +46,8 @@ One piece at a time, each with its own tests:
 13. ✅ `doctor`: checks Python, FFmpeg, the voice (it says a test line), your pictures, the Reddit keys, the library and the output folder, and says how to fix anything missing
 
 14. ✅ Version 1.0: the whole path from Reddit to finished videos works from the terminal or the page, with 113 tests (including real FFmpeg runs)
+15. ✅ A React page: Find stories, Library, a page for each story with Make video and a player, and Setup with the doctor checks and settings
+16. ✅ Share to YouTube: connect your own Google project once, then upload the full video or any part from the story page, private by default, with the writer credited in the description
 
 Planned next: a narrator voice cloned from your own recordings, as another voice engine.
 
@@ -122,6 +124,18 @@ python -m blueit video 1abc23               # captions.srt, full.mp4 and part-01
 
 Put your pictures in `images/` first (or in the story's own `output/<story>/images/`). Needs [FFmpeg](https://ffmpeg.org/download.html) (on Windows: `winget install ffmpeg`). Settings in `blueit.toml`: `video_size`, `captions`, `picture_seconds`, `shuffle_pictures` and `clip_seconds`.
 
+### Sharing to YouTube
+
+Blueit uploads with the official YouTube Data API, using a Google Cloud project that you own (it's free for normal use):
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), create a project and turn on **YouTube Data API v3**.
+2. Under **APIs & Services → OAuth consent screen**, set it up as **External** and add your own Google account as a test user.
+3. Under **Credentials**, create an **OAuth client ID** of type **Desktop app**, download the JSON, and save it as `youtube_client.json` in your Blueit folder.
+4. In `blueit ui`, open a story with a made video and press **Connect YouTube**. Sign in and allow uploads. Blueit saves the sign-in as `youtube_token.json`.
+5. Pick the full video or a part, choose who can see it (private, unlisted or public) and press **Upload to YouTube**. Upright parts get `#Shorts` in the title.
+
+`youtube_client.json` and `youtube_token.json` are secrets: they're in `.gitignore`, stay on your computer, and are only sent to Google. Delete `youtube_token.json` to disconnect. While your Google project is in testing, Google may ask you to sign in again after a week. YouTube may also keep videos from new, unverified projects private until the project passes Google's audit.
+
 ## Project layout
 
 | File | What it does |
@@ -136,6 +150,8 @@ Put your pictures in `images/` first (or in the story's own `output/<story>/imag
 | `blueit/video.py`, `parts.py` | FFmpeg: the full video and the 1-minute parts |
 | `blueit/project.py`, `pipeline.py` | Each story's folder, script and credit, and the steps in order |
 | `blueit/cli.py`, `doctor.py` | The commands, and the setup check |
+| `blueit/youtube.py` | Signing in to YouTube and resumable uploads |
+| `ui/` | The React page, built into `blueit/static/` |
 | `tests/` | `python -m unittest` |
 
 ## Using other people's stories

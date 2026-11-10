@@ -43,3 +43,6 @@ table.settings { border-collapse:collapse; width:100%; max-width:640px; }
 .settings th, .settings td { text-align:left; padding:6px 10px; border-bottom:1px solid var(--line); font-weight:normal; }
 .settings th { color:var(--muted); width:45%; }
 code { background:#0b0f18; padding:1px 5px; border-radius:4px; }
+.share { width:100%; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+.share h3 { margin:0 0 8px; } .share label { display:flex; flex-direction:column; gap:4px; font-size:.85rem; color:var(--muted); }
+.share .row { align-items:flex-end; } .share progress { accent-color:var(--accent); }

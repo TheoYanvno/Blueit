@@ -221,6 +221,56 @@ class Ranges(unittest.TestCase):
             self.assertIsNone(byte_range(bad, 1000), bad)
 
 
+class ShareToYouTube(unittest.TestCase):
+    """Connecting YouTube and uploading a made video, with Google faked."""
+
+    def setUp(self):
+        from .test_youtube import FakeGoogle
+        self.dir = tempfile.TemporaryDirectory()
+        d = Path(self.dir.name)
+        self.cfg = Config(output=d / "out", images=d / "images")
+        with Library(d / "library.db") as lib:
+            lib.add(story("s1", "The Visitor", 500, body="Someone knocked twice. " * 20))
+        self.google = FakeGoogle()
+        self.app = App(self.cfg, d / "library.db", d, youtube_dir=d, youtube_http=self.google)
+        self.d = d
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def test_status_says_what_is_missing(self):
+        self.assertEqual(self.app.youtube_status()["ready"], False)
+        with self.assertRaisesRegex(BadRequest, "youtube_client.json"):
+            self.app.youtube_connect("http://127.0.0.1:1/oauth/youtube")
+
+    def test_connect_then_share_a_part(self):
+        (self.d / "youtube_client.json").write_text(json.dumps({"installed": {"client_id": "a", "client_secret": "b"}}))
+        url = self.app.youtube_connect("http://127.0.0.1:1/oauth/youtube")["url"]
+        self.assertIn("accounts.google.com", url)
+        with self.assertRaises(BadRequest):
+            self.app.youtube_callback({"code": "good", "state": "wrong"}, "http://127.0.0.1:1/oauth/youtube")
+        self.app.youtube_callback({"code": "good", "state": self.app.youtube_state}, "http://127.0.0.1:1/oauth/youtube")
+        self.assertTrue(self.app.youtube_status()["connected"])
+        with self.assertRaisesRegex(BadRequest, "Make the video first"):
+            self.app.share_youtube({"id": "s1"})
+        folder = self.cfg.output / self.app.story({"id": "s1"})["folder"]
+        folder.mkdir(parents=True)
+        (folder / "part-01.mp4").write_bytes(b"v" * 1000)
+        self.app.share_youtube({"id": "s1", "video": "part-01.mp4", "privacy": "unlisted"}, wait=True)
+        share = self.app.youtube_status()["share"]
+        self.assertEqual((share["state"], share["link"]), ("done", "https://youtu.be/vid123"))
+        sent = json.loads(next(c for c in self.google.calls if c.full_url == youtube_upload_url()).data)
+        self.assertEqual(sent["status"]["privacyStatus"], "unlisted")
+        self.assertTrue(sent["snippet"]["title"].endswith("(Part 1) #Shorts"))
+        with self.assertRaises(BadRequest):
+            self.app.share_youtube({"id": "s1", "video": "../library.db"})
+
+
+def youtube_upload_url():
+    from blueit.youtube import UPLOAD_URL
+    return UPLOAD_URL
+
+
 class ReactApi(unittest.TestCase):
     """The endpoints the React interface uses: one story in full, its files, the setup checks and settings."""
 

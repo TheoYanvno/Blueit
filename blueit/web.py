@@ -15,6 +15,7 @@ in POST requests (so another site can't submit a form to it).
 """
 from __future__ import annotations
 
+import html
 import json
 import threading
 import webbrowser
@@ -83,8 +84,12 @@ class App:
     """What the page can ask for, kept apart from HTTP so it can be tested directly."""
 
     def __init__(self, cfg: Config, library: Path, out: Path = Path("listings"), reddit_factory=None, env=".env",
-                 voice_factory=None, video_runner=None):
+                 voice_factory=None, video_runner=None, youtube_dir: Path = Path("."), youtube_http=None):
         self.cfg = cfg
+        self.youtube_dir = Path(youtube_dir)          # where youtube_client.json and youtube_token.json live
+        self.youtube_http = youtube_http
+        self.youtube_state: str | None = None
+        self.share: dict = {"state": "idle"}
         self.voice_factory = voice_factory
         self.video_runner = video_runner
         self.job: dict = {"state": "idle"}
@@ -226,6 +231,87 @@ class App:
         with self.job_lock:
             return dict(self.job)
 
+    # ---- sharing to YouTube ----
+
+    def _yt(self):
+        from . import youtube
+        client = youtube.Client.load(self.youtube_dir / "youtube_client.json")
+        return youtube, client, self.youtube_dir / "youtube_token.json"
+
+    def youtube_status(self) -> dict:
+        has_client = (self.youtube_dir / "youtube_client.json").is_file()
+        connected = (self.youtube_dir / "youtube_token.json").is_file()
+        with self.job_lock:
+            share = dict(self.share)
+        return {"ready": has_client, "connected": has_client and connected, "share": share}
+
+    def youtube_connect(self, redirect_uri: str) -> dict:
+        youtube, client, _ = self._yt_or_bad()
+        url, self.youtube_state = youtube.auth_url(client, redirect_uri)
+        return {"url": url}
+
+    def youtube_callback(self, params: dict, redirect_uri: str) -> None:
+        youtube, client, token_path = self._yt_or_bad()
+        if not self.youtube_state or params.get("state") != self.youtube_state:
+            raise BadRequest("That sign-in link is old or wasn't started here. Press Connect YouTube again.")
+        if params.get("error"):
+            raise BadRequest(f"Google said: {params['error']}")
+        self.youtube_state = None
+        try:
+            youtube.exchange_code(client, str(params.get("code") or ""), redirect_uri, token_path,
+                                  **({"http": self.youtube_http} if self.youtube_http else {}))
+        except youtube.YouTubeError as e:
+            raise BadRequest(str(e)) from None
+
+    def _yt_or_bad(self):
+        from .youtube import YouTubeError
+        try:
+            return self._yt()
+        except YouTubeError as e:
+            raise BadRequest(str(e)) from None
+
+    def share_youtube(self, params: dict, wait: bool = False) -> dict:
+        data = self.story(params)
+        video = str(params.get("video") or data["full"] or "")
+        if video not in ([data["full"]] if data["full"] else []) + data["parts"]:
+            raise BadRequest("Make the video first, then pick the full video or one part to share.")
+        privacy = str(params.get("privacy") or "private")
+        youtube, client, token_path = self._yt_or_bad()
+        try:
+            youtube.access_token(client, token_path, **({"http": self.youtube_http} if self.youtube_http else {}))
+            w, _, h = self.cfg.video_size.partition("x")
+            upright = int(w) < int(h) if w.isdigit() and h.isdigit() else True
+            part = None if video == "full.mp4" else video.replace("part-", "Part ").replace(".mp4", "").replace("Part 0", "Part ")
+            s = data["story"]
+            details = youtube.video_details(s["title"], s["author"], s["subreddit"], s["url"], upright, part, privacy)
+        except youtube.YouTubeError as e:
+            raise BadRequest(str(e)) from None
+        with self.job_lock:
+            if self.share.get("state") == "running":
+                raise BadRequest("Already uploading a video. Wait for it to finish.")
+            self.share = {"state": "running", "id": s["id"], "video": video, "title": details["snippet"]["title"], "done": 0, "total": 0}
+        path = self.media_path(data["folder"], video)
+        worker = threading.Thread(target=self._upload, args=(youtube, client, token_path, path, details), daemon=True)
+        worker.start()
+        if wait:
+            worker.join()
+        with self.job_lock:
+            return dict(self.share)
+
+    def _upload(self, youtube, client, token_path, path, details) -> None:
+        extra = {"http": self.youtube_http} if self.youtube_http else {}
+        def progress(done, total):
+            with self.job_lock:
+                self.share.update(done=done, total=total)
+        try:
+            token = youtube.access_token(client, token_path, **extra)
+            vid = youtube.upload(path, details, token, progress=progress, **extra)
+            with self.job_lock:
+                self.share.update(state="done", video_id=vid, link=f"https://youtu.be/{vid}")
+        except Exception as e:                  # shown on the page; the server keeps running
+            with self.job_lock:
+                self.share.update(state="error", error=str(e))
+
     def _set(self, **changes) -> None:
         with self.job_lock:
             self.job.update(changes)
@@ -285,6 +371,10 @@ def make_handler(app: App, allowed_hosts: set[str]):
                 return self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
             return self._send(HTTPStatus.OK, target.read_bytes(), STATIC_TYPES[target.suffix])
 
+        def _redirect_uri(self) -> str:
+            # Google's desktop clients accept any loopback port, so the sign-in comes straight back here.
+            return f"http://127.0.0.1:{self.server.server_address[1]}/oauth/youtube"
+
         def _host_ok(self) -> bool:
             host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
             if host in allowed_hosts:
@@ -327,6 +417,16 @@ def make_handler(app: App, allowed_hosts: set[str]):
                     return self._json(HTTPStatus.OK, app.library(params))
                 if url.path == "/api/job":
                     return self._json(HTTPStatus.OK, app.status())
+                if url.path == "/api/youtube":
+                    return self._json(HTTPStatus.OK, app.youtube_status())
+                if url.path == "/oauth/youtube":
+                    try:
+                        app.youtube_callback(params, self._redirect_uri())
+                        msg = "Connected to YouTube. You can close this tab and go back to Blueit."
+                    except BadRequest as e:
+                        msg = f"Couldn't connect: {e}"
+                    page = f"<!doctype html><meta charset=utf-8><title>Blueit</title><p style='font:18px system-ui;margin:60px'>{html.escape(msg)}</p>"
+                    return self._send(HTTPStatus.OK, page.encode(), "text/html; charset=utf-8")
             except BadRequest as e:
                 return self._json(HTTPStatus.BAD_REQUEST, {"error": str(e)})
             self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
@@ -341,7 +441,9 @@ def make_handler(app: App, allowed_hosts: set[str]):
                 params = json.loads(self.rfile.read(size) or b"{}")
                 if not isinstance(params, dict):
                     raise BadRequest("Send a JSON object.")
-                route = {"/api/find": app.find, "/api/mark": app.mark, "/api/make": app.make}.get(urlparse(self.path).path)
+                route = {"/api/find": app.find, "/api/mark": app.mark, "/api/make": app.make,
+                         "/api/youtube/connect": lambda p: app.youtube_connect(self._redirect_uri()),
+                         "/api/share/youtube": app.share_youtube}.get(urlparse(self.path).path)
                 if not route:
                     return self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
                 return self._json(HTTPStatus.OK, route(params))
