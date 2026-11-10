@@ -267,7 +267,7 @@ def make_handler(app: App, allowed_hosts: set[str]):
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Security-Policy",
-                             "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+                             "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
                              "connect-src 'self'; img-src 'self' data:; media-src 'self'; frame-ancestors 'none'")
             self.end_headers()
             self.wfile.write(body)
@@ -276,10 +276,10 @@ def make_handler(app: App, allowed_hosts: set[str]):
             self._send(status, json.dumps(data).encode(), "application/json; charset=utf-8")
 
         def _static(self, path: str):
-            """The React app when it's built, otherwise the original single page."""
+            """The React app, or a short note on how to build it."""
             index = STATIC / "index.html"
             if not index.is_file():
-                return self._send(HTTPStatus.OK, PAGE.encode(), "text/html; charset=utf-8")
+                return self._send(HTTPStatus.OK, NOT_BUILT.encode(), "text/html; charset=utf-8")
             target = index if path == "/" else (STATIC / path.lstrip("/")).resolve()
             if STATIC.resolve() not in target.parents or not target.is_file() or target.suffix not in STATIC_TYPES:
                 return self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
@@ -372,210 +372,12 @@ def serve(cfg: Config, port: int = 8642, out: Path = Path("listings"), env: str 
     return 0
 
 
-PAGE = r"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Blueit</title>
-<style>
-  :root { --bg: #0f1420; --panel: #171e2e; --line: #2a3448; --text: #e6e9f0; --muted: #94a0b8; --accent: #4f8cff; --ok: #3fb67b; --bad: #ff7a7a; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
-  header { padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--panel); display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-  header h1 { margin: 0; font-size: 1.2rem; } header p { margin: 0; color: var(--muted); font-size: .9rem; }
-  main { max-width: 980px; margin: 0 auto; padding: 18px 20px 40px; }
-  .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
-  .tabs button[aria-selected="true"] { background: var(--accent); color: #fff; border-color: transparent; }
-  button, select, input { font: inherit; color: var(--text); background: #1d2537; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
-  button { cursor: pointer; } button:disabled { opacity: .6; cursor: wait; }
-  button.primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  form.menus { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
-  label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--muted); }
-  .actions { display: flex; align-items: end; gap: 10px; }
-  .status { margin: 12px 2px; color: var(--muted); min-height: 1.5em; }
-  .status.error { color: var(--bad); }
-  details.log { margin: 4px 0 12px; color: var(--muted); font-size: .85rem; } details.log pre { white-space: pre-wrap; margin: 6px 0 0; }
-  ol.stories { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-  .story { padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; display: flex; gap: 12px; align-items: flex-start; }
-  .story .body { flex: 1; min-width: 0; } .story a { color: var(--text); font-weight: 600; text-decoration: none; } .story a:hover { text-decoration: underline; }
-  .meta { color: var(--muted); font-size: .85rem; margin-top: 2px; }
-  .pill { display: inline-block; font-size: .72rem; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); margin-left: 6px; }
-  .pill.narrated { color: var(--ok); border-color: var(--ok); }
-  .job { margin: 0 0 14px; padding: 10px 14px; border-radius: 10px; background: var(--panel); border: 1px solid var(--accent); }
-  .job.error { border-color: var(--bad); color: var(--bad); } .job.done { border-color: var(--ok); }
-  .buttons { display: flex; flex-direction: column; gap: 6px; }
-  [hidden] { display: none !important; }
-</style>
-</head>
-<body>
-<header><h1>Blueit</h1><p>Pick what stories to find, then narrate the ones you like.</p></header>
-<main>
-  <div class="job" id="job" role="status" hidden></div>
-  <div class="tabs" role="tablist">
-    <button role="tab" id="tabFind" aria-selected="true" aria-controls="find">Find stories</button>
-    <button role="tab" id="tabLib" aria-selected="false" aria-controls="lib">Library</button>
-  </div>
-
-  <section id="find" role="tabpanel" aria-labelledby="tabFind">
-    <form class="menus" id="findForm">
-      <label>What kind of stories <select id="kind" name="kind"></select></label>
-      <label>Where <select id="subreddit" name="subreddit"></select></label>
-      <label>Posted in the <select id="time" name="time"></select></label>
-      <label>How long <select id="length" name="length"></select></label>
-      <label>At least this many upvotes <select id="minScore" name="minScore"></select></label>
-      <label>Posts to look at in each place <select id="limit" name="limit"></select></label>
-      <label>Words to look for (optional) <input id="words" name="words" maxlength="100" placeholder="e.g. cabin"></label>
-      <div class="actions"><button class="primary" id="go">Find stories</button></div>
-    </form>
-    <p class="status" id="findStatus" role="status"></p>
-    <details class="log" id="findLog" hidden><summary>What Blueit looked at</summary><pre></pre></details>
-    <ol class="stories" id="results"></ol>
-  </section>
-
-  <section id="lib" role="tabpanel" aria-labelledby="tabLib" hidden>
-    <form class="menus" id="libForm">
-      <label>Show <select id="libStatus" name="status">
-        <option value="new">Waiting to be narrated</option><option value="narrated">Narrated</option><option value="">All stories</option>
-      </select></label>
-      <label>Kind <select id="libKind" name="kind"><option value="">Every kind</option></select></label>
-      <label>Words (optional) <input id="libWords" name="words" maxlength="100"></label>
-      <div class="actions"><button id="libGo">Show</button></div>
-    </form>
-    <p class="status" id="libStatusText" role="status"></p>
-    <ol class="stories" id="library"></ol>
-  </section>
-</main>
-<script>
-const $ = (id) => document.getElementById(id);
-let OPTIONS;
-
-function fill(select, items, value) {
-  select.replaceChildren(...items.map(([v, label]) => new Option(label, v)));
-  if (value !== undefined) select.value = String(value);
-}
-
-function fillWhere() {
-  const kind = OPTIONS.kinds.find((k) => k.id === $('kind').value);
-  fill($('subreddit'), [['', `All ${kind.subreddits.length} places`], ...kind.subreddits.map((s) => [s, `r/${s}`])]);
-}
-
-async function api(path, body) {
-  const res = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || res.statusText);
-  return data;
-}
-
-function storyItem(s) {
-  const li = document.createElement('li');
-  li.className = 'story';
-  const body = document.createElement('div');
-  body.className = 'body';
-  const a = Object.assign(document.createElement('a'), { href: s.url, target: '_blank', rel: 'noopener', textContent: s.title });
-  const pill = Object.assign(document.createElement('span'), { className: `pill ${s.status}`, textContent: s.status === 'new' ? 'waiting' : 'narrated' });
-  const meta = Object.assign(document.createElement('div'), { className: 'meta',
-    textContent: `r/${s.subreddit} · u/${s.author} · ${s.words.toLocaleString()} words (about ${s.minutes} min) · ${s.score.toLocaleString()} upvotes${s.parts ? ` · ${s.parts} parts joined` : ''}` });
-  body.append(a, pill, meta);
-  const button = Object.assign(document.createElement('button'), { textContent: s.status === 'new' ? 'Mark narrated' : 'Mark not narrated' });
-  button.addEventListener('click', async () => {
-    button.disabled = true;
-    try { const { story } = await api('/api/mark', { id: s.id, status: s.status === 'new' ? 'narrated' : 'new' }); li.replaceWith(storyItem(story)); }
-    catch (e) { button.disabled = false; alert(e.message); }
-  });
-  const make = Object.assign(document.createElement('button'), { className: 'primary', textContent: 'Make video' });
-  make.addEventListener('click', async () => {
-    make.disabled = true;
-    try { showJob(await api('/api/make', { id: s.id })); watchJob(); }
-    catch (e) { alert(e.message); } finally { make.disabled = false; }
-  });
-  const buttons = Object.assign(document.createElement('div'), { className: 'buttons' });
-  buttons.append(make, button);
-  li.append(body, buttons);
-  return li;
-}
-
-function showJob(j) {
-  const box = $('job');
-  if (!j || j.state === 'idle') { box.hidden = true; return; }
-  box.hidden = false;
-  box.className = `job ${j.state}`;
-  const count = j.total ? ` (${j.done} of ${j.total} pieces)` : '';
-  box.textContent = j.state === 'running' ? `Making “${j.title}”: ${j.step}${count}…`
-    : j.state === 'done' ? `“${j.title}” is ready: about ${j.minutes} min, ${j.parts} ${j.parts === 1 ? 'part' : 'parts'}, in ${j.folder}`
-    : `“${j.title}” stopped: ${j.error}`;
-}
-let jobTimer;
-function watchJob() {
-  clearInterval(jobTimer);
-  jobTimer = setInterval(async () => {
-    const j = await api('/api/job');
-    showJob(j);
-    if (j.state !== 'running') { clearInterval(jobTimer); if (!$('lib').hidden) showLibrary(); }
-  }, 1500);
-}
-
-$('findForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const params = Object.fromEntries(new FormData(e.target));
-  $('go').disabled = true;
-  $('findStatus').className = 'status';
-  $('findStatus').textContent = 'Searching Reddit… this can take a minute when there are series to join.';
-  $('results').replaceChildren();
-  $('findLog').hidden = true;
-  try {
-    const data = await api('/api/find', params);
-    if (!data.ok) throw new Error(data.error);
-    $('findLog').hidden = !data.log.length;
-    $('findLog').querySelector('pre').textContent = data.log.join('\n');
-    $('results').replaceChildren(...data.stories.map(storyItem));
-    $('findStatus').textContent = data.stories.length
-      ? `${data.stories.length} finished ${data.stories.length === 1 ? 'story' : 'stories'} found and saved to your library.`
-      : 'No finished stories matched. Try a longer time range, fewer upvotes or any length.';
-  } catch (err) {
-    $('findStatus').className = 'status error';
-    $('findStatus').textContent = err.message;
-  } finally {
-    $('go').disabled = false;
-  }
-});
-
-async function showLibrary() {
-  const params = new URLSearchParams(new FormData($('libForm')));
-  try {
-    const data = await api(`/api/library?${params}`);
-    $('library').replaceChildren(...data.stories.map(storyItem));
-    $('libStatusText').className = 'status';
-    $('libStatusText').textContent = `${data.counts.new} waiting, ${data.counts.narrated} narrated in your library. Showing ${data.stories.length}.`;
-  } catch (err) { $('libStatusText').className = 'status error'; $('libStatusText').textContent = err.message; }
-}
-$('libForm').addEventListener('submit', (e) => { e.preventDefault(); showLibrary(); });
-['libStatus', 'libKind'].forEach((id) => $(id).addEventListener('change', showLibrary));
-
-for (const [tab, panel] of [['tabFind', 'find'], ['tabLib', 'lib']]) {
-  $(tab).addEventListener('click', () => {
-    for (const [t, p] of [['tabFind', 'find'], ['tabLib', 'lib']]) { $(t).setAttribute('aria-selected', String(t === tab)); $(p).hidden = t !== tab; }
-    if (panel === 'lib') showLibrary();
-  });
-}
-
-(async () => {
-  OPTIONS = await api('/api/options');
-  const d = OPTIONS.defaults;
-  fill($('kind'), OPTIONS.kinds.map((k) => [k.id, k.label]), d.kind);
-  fill($('time'), OPTIONS.times.map((t) => [t.id, t.label]), d.time);
-  fill($('length'), OPTIONS.lengths.map((l) => [l.id, l.label]), d.length);
-  fill($('minScore'), OPTIONS.minScores.map((n) => [n, n ? n.toLocaleString() : 'Any']), d.minScore);
-  fill($('limit'), OPTIONS.limits.map((n) => [n, String(n)]), d.limit);
-  $('libKind').append(...OPTIONS.kinds.map((k) => new Option(k.label, k.id)));
-  fillWhere();
-  $('kind').addEventListener('change', fillWhere);
-  const j = await api('/api/job');
-  showJob(j);
-  if (j.state === 'running') watchJob();
-})();
-</script>
-</body>
-</html>
+# Shown only when the React app hasn't been built (a fresh clone without blueit/static).
+NOT_BUILT = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Blueit</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;background:#0f1420;color:#e6e9f0;max-width:640px;margin:60px auto;padding:0 16px}
+code{background:#171e2e;padding:2px 6px;border-radius:4px}</style></head>
+<body><h1>Blueit</h1><p>The page hasn't been built yet. In the <code>ui</code> folder run:</p>
+<p><code>npm install</code> then <code>npm run build</code></p><p>and reload this page.</p></body></html>
 """
+

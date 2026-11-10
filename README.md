@@ -86,6 +86,15 @@ python -m blueit ui                         # opens http://localhost:8642 in you
 
 Choose **What kind of stories** (each kind is a short list of subreddits where people post whole stories, set in `blueit/categories.py`), then **Where** (all of them or one), **Posted in the**, **How long** (narration runs about 150 words a minute), **At least this many upvotes** and **Posts to look at**, and press **Find stories**. Finished stories go into the library; the **Library** tab lists them, searches them and marks them narrated. Press **Make video** on any story to narrate it and make its videos without leaving the page; the progress shows at the top. The page only answers on your own computer (localhost).
 
+The page has four parts:
+
+- **Find stories**: the menus above, with the stories each search finds
+- **Library**: every saved story, searchable by words, kind and status
+- **Story**: open any story to read it, press **Make video**, then watch the full video or each part and download them
+- **Setup**: the same checks as `blueit doctor`, with how to fix anything missing, and your current settings
+
+The page is a React app in `ui/`, built into `blueit/static/` (already built in this repo). After changing it, run `npm install` and `npm run build` in `ui/`.
+
 Blueit signs in with application-only access: it can read public posts and nothing else. It waits when Reddit's rate limit runs out and retries busy responses with growing waits.
 
 ### Narrate a story

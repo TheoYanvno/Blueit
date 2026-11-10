@@ -141,14 +141,13 @@ class Server(unittest.TestCase):
         for bad in ["/assets/../web.py", "/assets/nope.js"]:
             self.assertEqual(self.request("GET", bad)[0], 404, bad)
 
-    def test_the_old_page_is_used_when_the_app_is_not_built(self):
+    def test_a_build_note_is_shown_when_the_app_is_not_built(self):
         from unittest import mock
         import blueit.web as web
         with mock.patch.object(web, "STATIC", Path(self.dir.name) / "no-build"):
             status, _, body = self.request("GET", "/")
         self.assertEqual(status, 200)
-        for menu in ["kind", "subreddit", "time", "length", "minScore", "limit"]:
-            self.assertIn(f'<select id="{menu}"', body.decode())
+        self.assertIn("npm run build", body.decode())
 
     def test_options_and_a_search_over_http(self):
         status, _, body = self.request("GET", "/api/options")
