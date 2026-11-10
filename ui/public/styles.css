@@ -33,3 +33,13 @@ a { color:var(--accent); } a.button { display:inline-block; text-decoration:none
 .videos button[aria-pressed="true"] { border-color:var(--accent); color:var(--accent); }
 .story-text { max-width:760px; max-height:60vh; overflow:auto; }
 @media (max-width:700px) { .player { grid-template-columns:1fr; } }
+.ok { color:var(--ok); }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.setup h3 { margin:18px 0 6px; }
+.checks { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px; }
+.checks li { display:flex; gap:10px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+.checks li.ok > span:first-child { color:var(--ok); } .checks li.bad { border-color:var(--bad); } .checks li.bad > span:first-child { color:var(--bad); }
+table.settings { border-collapse:collapse; width:100%; max-width:640px; }
+.settings th, .settings td { text-align:left; padding:6px 10px; border-bottom:1px solid var(--line); font-weight:normal; }
+.settings th { color:var(--muted); width:45%; }
+code { background:#0b0f18; padding:1px 5px; border-radius:4px; }
