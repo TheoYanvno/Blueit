@@ -209,6 +209,19 @@ class MakeVideo(unittest.TestCase):
             self.assertIn("No pictures found", job["error"])
 
 
+class Ranges(unittest.TestCase):
+    """Range requests let the video player seek without downloading the whole file first."""
+
+    def test_byte_ranges(self):
+        from blueit.web import byte_range
+        self.assertEqual(byte_range("bytes=0-99", 1000), (0, 99))
+        self.assertEqual(byte_range("bytes=500-", 1000), (500, 999))
+        self.assertEqual(byte_range("bytes=-100", 1000), (900, 999))
+        self.assertEqual(byte_range("bytes=900-5000", 1000), (900, 999))
+        for bad in (None, "", "items=0-1", "bytes=5-2", "bytes=abc-", "bytes=0-1,5-9", "bytes=2000-"):
+            self.assertIsNone(byte_range(bad, 1000), bad)
+
+
 class ReactApi(unittest.TestCase):
     """The endpoints the React interface uses: one story in full, its files, the setup checks and settings."""
 

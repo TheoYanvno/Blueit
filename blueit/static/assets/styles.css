@@ -22,3 +22,14 @@ button.primary { background:var(--accent); border-color:var(--accent); color:#ff
 .jobbar { padding:10px 20px; border-bottom:1px solid var(--line); background:#121a2a; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 .jobbar.done { color:var(--ok); } .jobbar.error { color:var(--bad); }
 .jobbar progress { flex:1; min-width:120px; accent-color:var(--accent); }
+a { color:var(--accent); } a.button { display:inline-block; text-decoration:none; color:inherit; border:1px solid var(--line); border-radius:8px; padding:7px 12px; background:var(--panel); }
+.small { font-size:.85rem; }
+.story-page { display:flex; flex-direction:column; gap:12px; align-items:flex-start; }
+.story-page h2 { margin:4px 0 0; }
+.player { display:grid; grid-template-columns:minmax(0, 360px) 1fr; gap:16px; width:100%; align-items:start; }
+.player video { width:100%; max-height:70vh; background:#000; border-radius:12px; }
+.videos { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.videos li { display:flex; gap:10px; align-items:center; }
+.videos button[aria-pressed="true"] { border-color:var(--accent); color:var(--accent); }
+.story-text { max-width:760px; max-height:60vh; overflow:auto; }
+@media (max-width:700px) { .player { grid-template-columns:1fr; } }

@@ -42,6 +42,23 @@ class BadRequest(ValueError):
     pass
 
 
+def byte_range(header: str | None, size: int) -> tuple[int, int] | None:
+    """The (start, end) bytes asked for by a Range header like "bytes=100-" so the video player can
+    seek; None means send the whole file. Ranges that don't fit the file are clamped or ignored."""
+    if not header or not header.startswith("bytes=") or "," in header or size <= 0:
+        return None
+    start_s, _, end_s = header[6:].strip().partition("-")
+    try:
+        if start_s == "":                       # "bytes=-500": the last 500 bytes
+            n = int(end_s)
+            return (max(0, size - n), size - 1) if n > 0 else None
+        start = int(start_s)
+        end = min(int(end_s), size - 1) if end_s else size - 1
+    except ValueError:
+        return None
+    return (start, end) if 0 <= start <= end else None
+
+
 def _story(e: Entry) -> dict:
     return {"id": e.id, "title": e.title, "author": e.author, "subreddit": e.subreddit, "words": e.words,
             "minutes": max(1, round(e.words / WORDS_PER_MINUTE)), "score": e.score, "url": e.url,
@@ -241,9 +258,11 @@ def make_handler(app: App, allowed_hosts: set[str]):
         def log_message(self, *args):          # keep the terminal quiet
             pass
 
-        def _send(self, status: int, body: bytes, kind: str):
+        def _send(self, status: int, body: bytes, kind: str, extra: dict | None = None):
             self.send_response(status)
             self.send_header("Content-Type", kind)
+            for k, v in (extra or {}).items():
+                self.send_header(k, v)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
@@ -292,7 +311,16 @@ def make_handler(app: App, allowed_hosts: set[str]):
                     if len(parts) != 4:
                         raise BadRequest("Not a story file.")
                     path = app.media_path(parts[2], parts[3])
-                    return self._send(HTTPStatus.OK, path.read_bytes(), MEDIA_TYPES[path.suffix.lower()])
+                    kind, size = MEDIA_TYPES[path.suffix.lower()], path.stat().st_size
+                    wanted = byte_range(self.headers.get("Range"), size)
+                    if wanted is None:
+                        return self._send(HTTPStatus.OK, path.read_bytes(), kind, {"Accept-Ranges": "bytes"})
+                    start, end = wanted
+                    with path.open("rb") as f:
+                        f.seek(start)
+                        chunk = f.read(end - start + 1)
+                    return self._send(HTTPStatus.PARTIAL_CONTENT, chunk, kind,
+                                      {"Accept-Ranges": "bytes", "Content-Range": f"bytes {start}-{end}/{size}"})
                 if url.path == "/api/options":
                     return self._json(HTTPStatus.OK, app.options())
                 if url.path == "/api/library":

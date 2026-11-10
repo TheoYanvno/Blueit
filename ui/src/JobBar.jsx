@@ -3,7 +3,7 @@ import { get } from './api.js';
 
 // The video being made in the background, shown on every page: its step and a progress bar while it
 // runs, then "done" with the number of parts, or the error. Checks every 1.5 seconds while running.
-export default function JobBar({ nudge }) {
+export default function JobBar({ nudge, onDone }) {
   const [job, setJob] = useState({ state: 'idle' });
 
   useEffect(() => {
@@ -13,7 +13,10 @@ export default function JobBar({ nudge }) {
       try {
         const j = await get('/api/job');
         if (!alive) return;
-        setJob(j);
+        setJob(prev => {
+          if (prev.state === 'running' && j.state !== 'running' && onDone) setTimeout(onDone, 0);   // let pages reload their files
+          return j;
+        });
         if (j.state === 'running') timer = setTimeout(poll, 1500);
       } catch {
         if (alive) timer = setTimeout(poll, 5000);
