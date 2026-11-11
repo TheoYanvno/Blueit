@@ -141,6 +141,16 @@ Blueit uploads with the official YouTube Data API, using a Google Cloud project 
 
 TikTok's API only lets apps that have passed TikTok's audit post publicly; posts from apps that haven't are kept private. So Blueit prepares the post instead: on a story's page, pick the full video or a part, press **Download it**, **Copy caption** (the title, the part, the writer's credit and hashtags, within TikTok's 2,200 characters), then **Open TikTok upload**, choose the file and paste the caption.
 
+### The Windows app
+
+`Blueit.exe` is Blueit packaged with [PyInstaller](https://pyinstaller.org/), so Python isn't needed. Put it in a folder with your `blueit.toml`, `.env` and `images/`, then double-click it to open the page, or run `Blueit.exe doctor`, `Blueit.exe run --fetch` and the other commands in a terminal. FFmpeg still has to be installed (`winget install ffmpeg`).
+
+To build it yourself on Windows:
+
+```
+powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1    # makes dist\Blueit.exe
+```
+
 ## Project layout
 
 | File | What it does |
@@ -157,6 +167,7 @@ TikTok's API only lets apps that have passed TikTok's audit post publicly; posts
 | `blueit/cli.py`, `doctor.py` | The commands, and the setup check |
 | `blueit/youtube.py` | Signing in to YouTube and resumable uploads |
 | `ui/` | The React page, built into `blueit/static/` |
+| `packaging/` | The Windows app's entry point and build script |
 | `tests/` | `python -m unittest` |
 
 ## Using other people's stories

@@ -229,6 +229,11 @@ def cmd_doctor(args, cfg: Config) -> int:
     return 0 if all(c.ok for c in checks) else 1
 
 
+def frozen() -> bool:
+    """True when running as the packaged Windows app (PyInstaller) rather than from Python."""
+    return bool(getattr(sys, "frozen", False))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="blueit", description="Finished Reddit stories to narrated videos.")
     parser.add_argument("--config", default="blueit.toml")
@@ -268,6 +273,10 @@ def main(argv: list[str] | None = None) -> int:
     dr.add_argument("--env", default=".env", help="file with REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET")
     for p in (f, s, m, u, n, v, r, dr):
         p.add_argument("--library", help="the library file (default: library in blueit.toml, or library.db)")
+    if argv is None:
+        argv = sys.argv[1:]
+    if not argv and frozen():
+        argv = ["ui"]                    # double-clicking Blueit.exe opens the page
     args = parser.parse_args(argv)
     cfg = Config.load(args.config)
     return {"check": cmd_check, "fetch": cmd_fetch, "find": cmd_find, "mark": cmd_mark, "ui": cmd_ui,
