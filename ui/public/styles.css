@@ -46,3 +46,8 @@ code { background:#0b0f18; padding:1px 5px; border-radius:4px; }
 .share { width:100%; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
 .share h3 { margin:0 0 8px; } .share label { display:flex; flex-direction:column; gap:4px; font-size:.85rem; color:var(--muted); }
 .share .row { align-items:flex-end; } .share progress { accent-color:var(--accent); }
+.steps { margin:0; padding-left:20px; display:flex; flex-direction:column; gap:10px; }
+.steps li { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; }
+.steps label { display:flex; flex-direction:column; gap:4px; font-size:.85rem; color:var(--muted); }
+.caption { flex:1; min-width:260px; } .caption textarea { font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px; width:100%; }
+a.button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }

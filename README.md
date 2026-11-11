@@ -48,6 +48,7 @@ One piece at a time, each with its own tests:
 14. ✅ Version 1.0: the whole path from Reddit to finished videos works from the terminal or the page, with 113 tests (including real FFmpeg runs)
 15. ✅ A React page: Find stories, Library, a page for each story with Make video and a player, and Setup with the doctor checks and settings
 16. ✅ Share to YouTube: connect your own Google project once, then upload the full video or any part from the story page, private by default, with the writer credited in the description
+17. ✅ Post to TikTok: pick the full video or a part, download it, copy a ready caption that credits the writer, and open TikTok's upload page
 
 Planned next: a narrator voice cloned from your own recordings, as another voice engine.
 
@@ -135,6 +136,10 @@ Blueit uploads with the official YouTube Data API, using a Google Cloud project 
 5. Pick the full video or a part, choose who can see it (private, unlisted or public) and press **Upload to YouTube**. Upright parts get `#Shorts` in the title.
 
 `youtube_client.json` and `youtube_token.json` are secrets: they're in `.gitignore`, stay on your computer, and are only sent to Google. Delete `youtube_token.json` to disconnect. While your Google project is in testing, Google may ask you to sign in again after a week. YouTube may also keep videos from new, unverified projects private until the project passes Google's audit.
+
+### Posting to TikTok
+
+TikTok's API only lets apps that have passed TikTok's audit post publicly; posts from apps that haven't are kept private. So Blueit prepares the post instead: on a story's page, pick the full video or a part, press **Download it**, **Copy caption** (the title, the part, the writer's credit and hashtags, within TikTok's 2,200 characters), then **Open TikTok upload**, choose the file and paste the caption.
 
 ## Project layout
 

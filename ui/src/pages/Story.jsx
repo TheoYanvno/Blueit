@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, get } from '../api.js';
 import ShareYouTube from '../ShareYouTube.jsx';
+import ShareTikTok from '../ShareTikTok.jsx';
 
 // One story: its text, a Make video button that starts the narration and video in the background,
 // and players for the full video and each 1-minute part once they're made.
@@ -67,6 +68,7 @@ export default function Story({ id, onBack, onStarted, nudge }) {
         </div>
       ) : null}
       {videos.length > 0 && <ShareYouTube storyId={s.id} videos={videos} current={playing} />}
+      {videos.length > 0 && <ShareTikTok key={playing} story={s} videos={videos} current={playing} mediaUrl={media} />}
       {videos.length > 0 ? null : <p className="muted">No video yet. Press Make video: the narration and video are made in the background, and the bar at the top shows how far along it is.</p>}
 
       {data.files.some(f => !f.endsWith('.mp4')) && (
