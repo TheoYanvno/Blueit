@@ -8,6 +8,8 @@ Reddit search ─▶ finished-story check ─▶ clean text ─▶ narration aud
                                                                             output/<story>/part-01.mp4, part-02.mp4, …
 ```
 
+**Windows:** [download Blueit.exe](https://github.com/TheoYanvno/blueit/releases/latest/download/Blueit.exe) from the latest release, put it in its own folder and double-click it. It needs [FFmpeg](https://ffmpeg.org/download.html) (`winget install ffmpeg`). See [The Windows app](#the-windows-app).
+
 It starts with scary and creepy stories (r/nosleep, r/LetsNotMeet, r/Glitch_in_the_Matrix, r/TrueScaryStories, r/shortscarystories). Change the list in `blueit.toml`.
 
 ## What counts as a finished story
@@ -145,7 +147,7 @@ TikTok's API only lets apps that have passed TikTok's audit post publicly; posts
 
 `Blueit.exe` is Blueit packaged with [PyInstaller](https://pyinstaller.org/), so Python isn't needed. Put it in a folder with your `blueit.toml`, `.env` and `images/`, then double-click it to open the page, or run `Blueit.exe doctor`, `Blueit.exe run --fetch` and the other commands in a terminal. FFmpeg still has to be installed (`winget install ffmpeg`).
 
-To build it yourself on Windows:
+Each version tag (like `v1.1.0`) builds it on GitHub Actions (`.github/workflows/windows-app.yml`) and attaches it to that release. To build it yourself on Windows:
 
 ```
 powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1    # makes dist\Blueit.exe
@@ -175,3 +177,7 @@ powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1    # makes 
 Reddit posts belong to the people who wrote them, and Reddit's API terms apply to anything fetched through it. Blueit keeps each story's author and link with the video so you can credit them. Ask the author before posting a video of their story publicly; many story writers say yes when asked.
 
 Built with help from AI coding tools; every part was reviewed and tested by me.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
