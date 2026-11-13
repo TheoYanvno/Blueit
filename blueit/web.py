@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import html
 import json
+import platform
 import threading
 import webbrowser
 from dataclasses import replace
@@ -30,6 +31,7 @@ from .config import Config
 from .library import STATUSES, Entry, Library
 from .reddit import Credentials, Reddit, RedditError, load_env
 
+MAX_RECORDING = 60 * 1024 * 1024                    # a WAV upload: about 10 minutes at 48 kHz
 STATIC = Path(__file__).parent / "static"          # the React app, built by `npm run build` in ui/
 MEDIA_TYPES = {".mp4": "video/mp4", ".srt": "text/plain; charset=utf-8", ".txt": "text/plain; charset=utf-8",
                ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
@@ -84,8 +86,10 @@ class App:
     """What the page can ask for, kept apart from HTTP so it can be tested directly."""
 
     def __init__(self, cfg: Config, library: Path, out: Path = Path("listings"), reddit_factory=None, env=".env",
-                 voice_factory=None, video_runner=None, youtube_dir: Path = Path("."), youtube_http=None):
+                 voice_factory=None, video_runner=None, youtube_dir: Path = Path("."), youtube_http=None,
+                 config_path: Path = Path("blueit.toml")):
         self.cfg = cfg
+        self.config_path = Path(config_path)         # where "use my voice as the narrator" is saved
         self.youtube_dir = Path(youtube_dir)          # where youtube_client.json and youtube_token.json live
         self.youtube_http = youtube_http
         self.youtube_state: str | None = None
@@ -216,6 +220,70 @@ class App:
     def settings(self) -> dict:
         from dataclasses import asdict
         return {"settings": {k: (str(v) if isinstance(v, Path) else v) for k, v in asdict(self.cfg).items()}}
+
+    # ---- My voice ----
+
+    def _voices(self):
+        from .myvoice import VoiceStore
+        return VoiceStore(self.cfg.voices)
+
+    def voices(self) -> dict:
+        from dataclasses import asdict
+        from .myvoice import MIN_SECONDS, SCRIPT, SUGGESTED_SECONDS, addon_installed
+        store = self._voices()
+        default = store.default
+        return {"voices": [asdict(v) for v in store.list()], "default": default.slug if default else None,
+                "narrator": self.cfg.voice_engine == "myvoice", "engine": self.cfg.voice_engine,
+                "addon": addon_installed(), "script": SCRIPT, "minSeconds": MIN_SECONDS, "suggestedSeconds": SUGGESTED_SECONDS}
+
+    def voice_upload(self, name: str, mine: bool, data: bytes) -> dict:
+        from .narrate import VoiceError
+        try:
+            v = self._voices().save(name, data, own_voice=mine)
+        except VoiceError as e:
+            raise BadRequest(str(e))
+        return {"saved": v.slug, **self.voices()}
+
+    def voice_action(self, params: dict) -> dict:
+        """rename, delete, default, or use (My voice as the narrator: on or off), saved to blueit.toml."""
+        from .myvoice import set_setting
+        from .narrate import VoiceError
+        store, action, key = self._voices(), str(params.get("action") or ""), str(params.get("voice") or "")
+        try:
+            if action == "rename":
+                store.rename(key, str(params.get("name") or ""))
+            elif action == "delete":
+                store.delete(key)
+            elif action == "default":
+                store.set_default(key)
+            elif action == "use":
+                on = bool(params.get("on"))
+                if on:
+                    v = store.set_default(key) if key else store.default
+                    if not v:
+                        raise BadRequest("Record and save a voice first.")
+                    engine, voice = "myvoice", v.name
+                else:
+                    engine, voice = ("windows" if platform.system() == "Windows" else "espeak"), ""
+                set_setting(self.config_path, "voice_engine", engine)
+                set_setting(self.config_path, "voice", voice)
+                self.cfg.voice_engine, self.cfg.voice = engine, voice
+            else:
+                raise BadRequest("Unknown voice action.")
+        except VoiceError as e:
+            raise BadRequest(str(e))
+        return self.voices()
+
+    def voice_clip(self, slug: str, which: str) -> Path:
+        """A saved voice's recording or 15-second prompt, to listen to on the page."""
+        v = self._voices().get(slug)
+        name = {"prompt": "prompt.wav", "recording": "recording.wav"}.get(which)
+        if not v or not name or v.slug != slug:
+            raise BadRequest("No such voice.")
+        path = v.folder(Path(self.cfg.voices)) / name
+        if not path.is_file():
+            raise BadRequest("That recording is missing.")
+        return path
 
     def media_path(self, folder: str, name: str) -> Path:
         """A file inside one story's output folder; anything that tries to step outside it is refused."""
@@ -411,6 +479,11 @@ def make_handler(app: App, allowed_hosts: set[str]):
                         chunk = f.read(end - start + 1)
                     return self._send(HTTPStatus.PARTIAL_CONTENT, chunk, kind,
                                       {"Accept-Ranges": "bytes", "Content-Range": f"bytes {start}-{end}/{size}"})
+                if url.path == "/api/voices":
+                    return self._json(HTTPStatus.OK, app.voices())
+                if url.path == "/api/voices/clip":
+                    path = app.voice_clip(params.get("voice", ""), params.get("which", "prompt"))
+                    return self._send(HTTPStatus.OK, path.read_bytes(), "audio/wav")
                 if url.path == "/api/options":
                     return self._json(HTTPStatus.OK, app.options())
                 if url.path == "/api/library":
@@ -434,6 +507,9 @@ def make_handler(app: App, allowed_hosts: set[str]):
         def do_POST(self):
             if not self._host_ok():
                 return
+            url = urlparse(self.path)
+            if url.path == "/api/voices/upload":         # a WAV recorded on the page: raw bytes, not JSON
+                return self._voice_upload(url)
             if not (self.headers.get("Content-Type") or "").startswith("application/json"):
                 return self._json(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, {"error": "Send JSON."})
             try:
@@ -443,11 +519,24 @@ def make_handler(app: App, allowed_hosts: set[str]):
                     raise BadRequest("Send a JSON object.")
                 route = {"/api/find": app.find, "/api/mark": app.mark, "/api/make": app.make,
                          "/api/youtube/connect": lambda p: app.youtube_connect(self._redirect_uri()),
-                         "/api/share/youtube": app.share_youtube}.get(urlparse(self.path).path)
+                         "/api/share/youtube": app.share_youtube, "/api/voices": app.voice_action}.get(url.path)
                 if not route:
                     return self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
                 return self._json(HTTPStatus.OK, route(params))
             except (BadRequest, json.JSONDecodeError, ValueError) as e:
+                return self._json(HTTPStatus.BAD_REQUEST, {"error": str(e)})
+
+        def _voice_upload(self, url):
+            if (self.headers.get("Content-Type") or "").split(";")[0].strip() not in ("audio/wav", "audio/x-wav", "audio/wave"):
+                return self._json(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, {"error": "Send the recording as a WAV file."})
+            size = int(self.headers.get("Content-Length") or 0)
+            if not 44 < size <= MAX_RECORDING:
+                return self._json(HTTPStatus.BAD_REQUEST, {"error": "The recording is empty or longer than about 10 minutes."})
+            params = {k: v[-1] for k, v in parse_qs(url.query).items()}
+            try:
+                data = app.voice_upload(params.get("name", ""), params.get("mine") == "1", self.rfile.read(size))
+                return self._json(HTTPStatus.OK, data)
+            except BadRequest as e:
                 return self._json(HTTPStatus.BAD_REQUEST, {"error": str(e)})
 
     return Handler
@@ -459,8 +548,8 @@ def make_server(app: App, port: int = 8642) -> ThreadingHTTPServer:
 
 
 def serve(cfg: Config, port: int = 8642, out: Path = Path("listings"), env: str = ".env",
-          library: Path = Path("library.db"), open_browser: bool = True) -> int:
-    server = make_server(App(cfg, library, out, env=env), port)
+          library: Path = Path("library.db"), open_browser: bool = True, config_path: Path = Path("blueit.toml")) -> int:
+    server = make_server(App(cfg, library, out, env=env, config_path=config_path), port)
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     print(f"Blueit is running at {url}  (Ctrl+C to stop)")
     if open_browser:

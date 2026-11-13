@@ -116,6 +116,8 @@ Each story gets a folder in `output/`: `script.txt` (exactly what's read aloud),
 
 Blueit can tell stories in **your** voice. Record yourself reading a five-minute script once, and Blueit clones your voice from it with [Chatterbox](https://github.com/resemble-ai/chatterbox) by Resemble AI (MIT license, commercial use allowed). It's an optional add-on because it's a big download (PyTorch and a model of about 2 GB; a graphics card makes it much faster):
 
+The easiest way is the **My voice** page in `blueit ui`: it shows the script in large print, records you in the browser with a timer and a microphone meter (pause whenever you like), lets you listen back, and saves the voice after you tick that it's your own. There you can rename and delete saved voices, pick the default, play the 15-second clip Blueit copies, and switch **Use my voice as the default narrator** on or off (it updates `blueit.toml`). From the terminal:
+
 ```
 pip install chatterbox-tts
 python -m blueit voices script              # the reading script (about 750 words, five minutes)

@@ -151,3 +151,69 @@ class SettingTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PageTest(unittest.TestCase):
+    """The Record my voice page's server side: upload, list, rename, default, use as narrator, delete."""
+
+    def setUp(self):
+        import http.client
+        import threading
+        from blueit.config import Config
+        from blueit.web import App, make_server
+        self.http = http.client
+        self.tmp = Path(tempfile.mkdtemp())
+        self.toml = self.tmp / "blueit.toml"
+        self.toml.write_text('[blueit]\nvoice_engine = "espeak"\n', encoding="utf-8")
+        self.cfg = Config(voices=self.tmp / "voices", output=self.tmp / "out", voice_engine="espeak")
+        self.app = App(self.cfg, self.tmp / "library.db", config_path=self.toml)
+        self.server = make_server(self.app, port=0)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.rec = tone_wav(self.tmp / "rec.wav", [1] * 50).read_bytes()
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+    def request(self, method, path, body=None, kind="application/json"):
+        import json
+        c = self.http.HTTPConnection("127.0.0.1", self.server.server_address[1])
+        data = body if isinstance(body, bytes) else (json.dumps(body).encode() if body is not None else None)
+        c.request(method, path, data, {"Content-Type": kind} if data is not None else {})
+        r = c.getresponse()
+        raw = r.read()
+        return r.status, (json.loads(raw) if r.getheader("Content-Type", "").startswith("application/json") else raw)
+
+    def test_upload_needs_the_own_voice_tick_then_lists_and_plays_the_clip(self):
+        status, data = self.request("GET", "/api/voices")
+        self.assertEqual((status, data["voices"], data["narrator"]), (200, [], False))
+        self.assertIn("Whispering", data["script"])
+        status, data = self.request("POST", "/api/voices/upload?name=Anthony", self.rec, "audio/wav")
+        self.assertEqual(status, 400)
+        self.assertIn("own voice", data["error"])
+        status, data = self.request("POST", "/api/voices/upload?name=Anthony&mine=1", self.rec, "audio/wav")
+        self.assertEqual((status, data["saved"], data["default"]), (200, "anthony", "anthony"))
+        status, clip = self.request("GET", "/api/voices/clip?voice=anthony&which=prompt")
+        self.assertEqual(status, 200)
+        self.assertEqual(clip[:4], b"RIFF")
+        self.assertEqual(self.request("GET", "/api/voices/clip?voice=../etc&which=prompt")[0], 400)
+        self.assertEqual(self.request("POST", "/api/voices/upload?mine=1", b"x" * 100, "text/plain")[0], 415)
+
+    def test_use_as_narrator_saves_to_blueit_toml_and_can_be_turned_off(self):
+        self.request("POST", "/api/voices/upload?name=Anthony&mine=1", self.rec, "audio/wav")
+        status, data = self.request("POST", "/api/voices", {"action": "use", "voice": "anthony", "on": True})
+        self.assertEqual((status, data["narrator"]), (200, True))
+        self.assertIn('voice_engine = "myvoice"', self.toml.read_text(encoding="utf-8"))
+        self.assertIn('voice = "Anthony"', self.toml.read_text(encoding="utf-8"))
+        status, data = self.request("POST", "/api/voices", {"action": "use", "on": False})
+        self.assertFalse(data["narrator"])
+        self.assertNotIn("myvoice", self.toml.read_text(encoding="utf-8"))
+
+    def test_rename_and_delete(self):
+        self.request("POST", "/api/voices/upload?name=Anthony&mine=1", self.rec, "audio/wav")
+        _, data = self.request("POST", "/api/voices", {"action": "rename", "voice": "anthony", "name": "Night voice"})
+        self.assertEqual(data["voices"][0]["name"], "Night voice")
+        _, data = self.request("POST", "/api/voices", {"action": "delete", "voice": "anthony"})
+        self.assertEqual(data["voices"], [])
+        status, data = self.request("POST", "/api/voices", {"action": "fly"})
+        self.assertEqual(status, 400)

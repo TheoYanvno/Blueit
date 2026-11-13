@@ -341,7 +341,7 @@ def cmd_ui(args, cfg: Config) -> int:
     except OSError:
         pass
     return serve(cfg, port=args.port, out=Path(args.out), env=args.env, library=_library_path(args, cfg),
-                 open_browser=not args.no_browser)
+                 open_browser=not args.no_browser, config_path=Path(args.config))
 
 
 if __name__ == "__main__":

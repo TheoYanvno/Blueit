@@ -51,3 +51,22 @@ code { background:#0b0f18; padding:1px 5px; border-radius:4px; }
 .steps label { display:flex; flex-direction:column; gap:4px; font-size:.85rem; color:var(--muted); }
 .caption { flex:1; min-width:260px; } .caption textarea { font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px; width:100%; }
 a.button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+/* My voice */
+.myvoice .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin:14px 0; }
+.myvoice h3 { margin:0 0 10px; }
+.myvoice code { background:var(--bg); padding:1px 6px; border-radius:4px; }
+.myvoice .notice { border:1px solid var(--accent); border-radius:10px; padding:10px 12px; }
+.myvoice label { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.myvoice label.check { margin:8px 0; }
+.rec-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+.rec-time { font-variant-numeric:tabular-nums; font-weight:600; }
+.rec-meter { display:inline-block; width:140px; height:8px; border-radius:4px; background:var(--bg); overflow:hidden; }
+.rec-meter span { display:block; height:100%; background:var(--ok); transition:width .08s linear; }
+.take { margin-top:12px; display:flex; flex-direction:column; gap:8px; align-items:flex-start; }
+.take audio, .voices audio { width:100%; max-width:420px; }
+.script p { font-size:1.15rem; line-height:1.7; max-width:68ch; }
+.script summary { cursor:pointer; font-weight:600; }
+.voices { list-style:none; padding:0; margin:10px 0; display:flex; flex-direction:column; gap:12px; }
+.voices li { display:flex; flex-direction:column; gap:4px; border-top:1px solid var(--line); padding-top:10px; }
+button.link { background:none; border:none; color:var(--accent); padding:0; text-decoration:underline; }
+button.link.danger { color:var(--bad); }

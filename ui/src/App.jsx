@@ -3,9 +3,10 @@ import Find from './pages/Find.jsx';
 import Library from './pages/Library.jsx';
 import Story from './pages/Story.jsx';
 import Setup from './pages/Setup.jsx';
+import MyVoice from './pages/MyVoice.jsx';
 import JobBar from './JobBar.jsx';
 
-const PAGES = [['find', 'Find stories'], ['library', 'Library'], ['setup', 'Setup']];
+const PAGES = [['find', 'Find stories'], ['library', 'Library'], ['voice', 'My voice'], ['setup', 'Setup']];
 
 export default function App() {
   const [page, setPage] = useState('find');
@@ -27,6 +28,7 @@ export default function App() {
         {openId ? <Story id={openId} nudge={nudge} onBack={() => setOpenId(null)} onStarted={() => setNudge(n => n + 1)} />
           : page === 'find' ? <Find onOpen={setOpenId} />
           : page === 'setup' ? <Setup />
+          : page === 'voice' ? <MyVoice />
           : <Library onOpen={setOpenId} />}
       </main>
     </>

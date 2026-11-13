@@ -10,3 +10,4 @@ listings/
 *.db
 youtube_client.json
 youtube_token.json
+voices/
