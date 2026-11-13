@@ -1,7 +1,8 @@
 """Pictures for the video: which still image is on screen when.
 
-Pictures come from the story's own `images/` folder inside its output folder if it has one, or else
-from the shared `images/` folder in blueit.toml. Each picture stays on screen for about
+Pictures come from the story's own `images/` folder inside its output folder if it has one, then
+from the folder for its kind of story (images/scary/, images/funny/, ... see moods.py), then from the
+shared `images/` folder itself. Each picture stays on screen for about
 `seconds_each`, and changes only between sentences (at a caption boundary), so a picture never
 switches in the middle of a line. With more time than pictures, they repeat in order; the order is
 the file names' order, or a shuffle that's the same every time for the same story.
@@ -19,16 +20,22 @@ class PictureError(RuntimeError):
     pass
 
 
-def find_pictures(story_folder: Path, shared: Path) -> list[Path]:
-    """The pictures for one story: its own images/ folder if it has pictures, else the shared folder."""
-    for folder in (Path(story_folder) / "images", Path(shared)):
-        if folder.is_dir():
-            found = sorted((p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in PICTURE_TYPES),
-                           key=lambda p: p.name.lower())
-            if found:
-                return found
-    raise PictureError(f"No pictures found. Put .jpg, .png or .webp files in {Path(shared)}/ "
+def find_pictures(story_folder: Path, shared: Path, kind: str = "") -> list[Path]:
+    """The pictures for one story: its own images/ folder, else its kind's folder, else the shared folder."""
+    from .moods import files_in, search_order
+    for folder in search_order(story_folder, shared, kind, "images"):
+        found = files_in(folder, PICTURE_TYPES)
+        if found:
+            return found
+    where = f"{Path(shared) / kind}/ or {Path(shared)}/" if kind else f"{Path(shared)}/"
+    raise PictureError(f"No pictures found. Put .jpg, .png or .webp files in {where} "
                        f"(or in {Path(story_folder) / 'images'}/ for this story only).")
+
+
+def any_pictures(shared: Path) -> bool:
+    """True when there's at least one picture in images/ or any kind's folder in it."""
+    from .moods import KINDS, files_in
+    return any(files_in(f, PICTURE_TYPES) for f in [Path(shared), *(Path(shared) / k for k in KINDS)])
 
 
 @dataclass(frozen=True)

@@ -63,17 +63,30 @@ def video_filter(size: tuple[int, int], captions: str | None) -> str:
     return vf
 
 
-def build_command(exe: str, size: tuple[int, int], captions: str | None, out: str = "full.mp4") -> list[str]:
-    return [exe, "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "concat", "-safe", "0", "-i", "shots.txt",
-            "-i", "narration.wav",
-            "-vf", video_filter(size, captions),
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", out]
+def build_command(exe: str, size: tuple[int, int], captions: str | None, out: str = "full.mp4",
+                  sound: Path | None = None, sound_volume: float = 0.12, length: float = 0.0) -> list[str]:
+    """With a background sound, it loops for as long as the narration runs, quietly underneath it, and
+    fades in and out so it never starts or stops with a jolt."""
+    cmd = [exe, "-hide_banner", "-loglevel", "error", "-y",
+           "-f", "concat", "-safe", "0", "-i", "shots.txt",
+           "-i", "narration.wav"]
+    if sound and sound_volume > 0:
+        vol = min(1.0, float(sound_volume))
+        fade_out = f",afade=t=out:st={max(0.0, length - 3):.2f}:d=3" if length > 6 else ""
+        cmd += ["-stream_loop", "-1", "-i", str(Path(sound).resolve()),
+                "-filter_complex",
+                f"[0:v]{video_filter(size, captions)}[v];"
+                f"[2:a]volume={vol:.2f},afade=t=in:d=2{fade_out}[bg];"
+                f"[1:a][bg]amix=inputs=2:duration=first:normalize=0[a]",
+                "-map", "[v]", "-map", "[a]"]
+    else:
+        cmd += ["-vf", video_filter(size, captions)]
+    return cmd + ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+                  "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", out]
 
 
 def make_video(folder: Path, shots, size: str = "1080x1920", captions: bool = True, runner=subprocess.run,
-               exe: str | None = None) -> Path:
+               exe: str | None = None, sound: Path | None = None, sound_volume: float = 0.12) -> Path:
     """Writes folder/full.mp4 from folder/narration.wav, the shots, and folder/captions.srt if
     `captions` is on. Returns the video's path."""
     folder = Path(folder)
@@ -82,7 +95,8 @@ def make_video(folder: Path, shots, size: str = "1080x1920", captions: bool = Tr
     if captions and not (folder / "captions.srt").exists():
         raise VideoError(f"{folder.name} has no captions.srt")
     (folder / "shots.txt").write_text(concat_list(shots), encoding="utf-8")
-    cmd = build_command(exe or ffmpeg_path(), parse_size(size), "captions.srt" if captions else None)
+    cmd = build_command(exe or ffmpeg_path(), parse_size(size), "captions.srt" if captions else None,
+                        sound=sound, sound_volume=sound_volume, length=shots[-1].end if shots else 0.0)
     r = runner(cmd, cwd=folder, capture_output=True, text=True)
     if r.returncode != 0:
         raise VideoError(f"FFmpeg couldn't make the video: {(r.stderr or '').strip()[-400:]}")

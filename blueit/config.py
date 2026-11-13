@@ -22,6 +22,8 @@ class Config:
     allow_nsfw: bool = False
     output: Path = Path("output")
     images: Path = Path("images")
+    music: Path = Path("music")    # background sound, by kind of story (music/scary/, ...)
+    music_volume: float = 0.12     # how loud the background is under the voice, 0 (off) to 1
     clip_seconds: int = 60
     library: Path = Path("library.db")  # the story library (SQLite)
     video_size: str = "1080x1920"  # upright for phones; "1920x1080" for widescreen
@@ -39,7 +41,7 @@ class Config:
             return cls()
         data = tomllib.loads(p.read_text(encoding="utf-8"))
         known = {k: v for k, v in data.get("blueit", data).items() if k in cls.__dataclass_fields__}
-        for key in ("output", "images", "library"):
+        for key in ("output", "images", "music", "library"):
             if key in known:
                 known[key] = Path(known[key])
         return cls(**known)

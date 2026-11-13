@@ -182,14 +182,16 @@ def cmd_video(args, cfg: Config, runner=None) -> int:
 
 def cmd_run(args, cfg: Config, voice=None, runner=None, reddit=None) -> int:
     from .narrate import VoiceError, make_voice, narrate
-    from .pictures import PictureError, find_pictures
+    from .pictures import PictureError, any_pictures
     from .pipeline import make
     from .project import folder_for, prepare
     from .video import VideoError, ffmpeg_path
     try:
         if runner is None:
             ffmpeg_path()                                   # say so now, not after a long narration
-        find_pictures(cfg.output / "_", cfg.images)
+        if not any_pictures(cfg.images):
+            raise PictureError(f"No pictures found. Put .jpg, .png or .webp files in {cfg.images}/ "
+                               f"or its mood folders ({cfg.images}/scary/, {cfg.images}/funny/, ...).")
         voice = voice or make_voice(args.voice or cfg.voice_engine, cfg.voice, cfg.voice_rate)
     except (VideoError, PictureError, VoiceError) as e:
         print(e, file=sys.stderr)
@@ -285,7 +287,12 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def cmd_ui(args, cfg: Config) -> int:
+    from .moods import ensure_folders
     from .web import serve
+    try:
+        ensure_folders(cfg.images, cfg.music)    # a picture and a sound folder for every kind of story
+    except OSError:
+        pass
     return serve(cfg, port=args.port, out=Path(args.out), env=args.env, library=_library_path(args, cfg),
                  open_browser=not args.no_browser)
 

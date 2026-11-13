@@ -125,7 +125,9 @@ python -m blueit run --count 3              # the top 3 waiting stories, one aft
 python -m blueit video 1abc23               # captions.srt, full.mp4 and part-01.mp4, part-02.mp4, … for a narrated story
 ```
 
-Put your pictures in `images/` first (or in the story's own `output/<story>/images/`). Needs [FFmpeg](https://ffmpeg.org/download.html) (on Windows: `winget install ffmpeg`). Settings in `blueit.toml`: `video_size`, `captions`, `picture_seconds`, `shuffle_pictures` and `clip_seconds`.
+Put your pictures in `images/` first. Blueit makes a mood folder for each kind of story the first time you run `doctor` or open the page: `images/scary/`, `images/paranormal/`, `images/revenge/`, `images/work/`, `images/family/` and `images/funny/`. A story uses its kind's folder (a story from r/nosleep uses `images/scary/`), then any pictures right in `images/`. A story's own `output/<story>/images/` comes first if you make one.
+
+**Background sound:** put .mp3, .m4a, .wav or .ogg files in the matching `music/` folder (`music/scary/`, `music/funny/`, …) and each video gets one of them, looped quietly under the voice with a fade in and out. `music_volume` in `blueit.toml` sets how loud (0.12 by default; 0 turns it off). Use sounds you're allowed to post, such as YouTube Audio Library tracks or ones you made. Needs [FFmpeg](https://ffmpeg.org/download.html) (on Windows: `winget install ffmpeg`). Settings in `blueit.toml`: `video_size`, `captions`, `picture_seconds`, `shuffle_pictures`, `music_volume` and `clip_seconds`.
 
 ### Sharing to YouTube
 
@@ -145,7 +147,7 @@ TikTok's API only lets apps that have passed TikTok's audit post publicly; posts
 
 ### The Windows app
 
-`Blueit.exe` is Blueit packaged with [PyInstaller](https://pyinstaller.org/), so Python isn't needed. Put it in a folder with your `blueit.toml`, `.env` and `images/`, then double-click it to open the page, or run `Blueit.exe doctor`, `Blueit.exe run --fetch` and the other commands in a terminal. FFmpeg still has to be installed (`winget install ffmpeg`).
+`Blueit.exe` is Blueit packaged with [PyInstaller](https://pyinstaller.org/), so Python isn't needed. Put it in a folder with your `blueit.toml`, `.env`, `images/` and `music/`, then double-click it to open the page, or run `Blueit.exe doctor`, `Blueit.exe run --fetch` and the other commands in a terminal. FFmpeg still has to be installed (`winget install ffmpeg`).
 
 Each version tag (like `v1.1.0`) builds it on GitHub Actions (`.github/workflows/windows-app.yml`) and attaches it to that release. To build it yourself on Windows:
 
@@ -164,6 +166,7 @@ powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1    # makes 
 | `blueit/categories.py`, `web.py` | The menus page and its small local server |
 | `blueit/narrate.py` | Voices, pieces, pauses and timings |
 | `blueit/pictures.py`, `captions.py` | Which picture shows when, and the caption lines |
+| `blueit/moods.py` | Mood folders: pictures and background sound for each kind of story |
 | `blueit/video.py`, `parts.py` | FFmpeg: the full video and the 1-minute parts |
 | `blueit/project.py`, `pipeline.py` | Each story's folder, script and credit, and the steps in order |
 | `blueit/cli.py`, `doctor.py` | The commands, and the setup check |

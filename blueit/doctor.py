@@ -38,10 +38,23 @@ def run_checks(cfg: Config, env: str = ".env", which=shutil.which, voice_factory
         out.append(Check(f"Voice ({cfg.voice_engine})", ok, "speaks" if ok else "made an empty file"))
     except (VoiceError, OSError) as e:
         out.append(Check(f"Voice ({cfg.voice_engine})", False, str(e)))
+    from .moods import SOUND_TYPES, counts, ensure_folders
     folder = Path(cfg.images)
-    pics = [p for p in folder.iterdir() if p.suffix.lower() in PICTURE_TYPES] if folder.is_dir() else []
-    out.append(Check("Pictures", bool(pics), f"{len(pics)} in {folder}" if pics else
-                     f"none yet: put .jpg, .png or .webp files in {folder}/"))
+    music = Path(getattr(cfg, "music", "music"))
+    try:
+        ensure_folders(folder, music)            # images/scary/, music/scary/, ... so there's a place for each
+    except OSError:
+        pass
+    pics = counts(folder, PICTURE_TYPES)
+    total = sum(pics.values())
+    by_kind = ", ".join(f"{k} {n}" for k, n in pics.items() if k and n)
+    out.append(Check("Pictures", total > 0, (f"{total} in {folder}" + (f" ({by_kind})" if by_kind else "")) if total else
+                     f"none yet: put .jpg, .png or .webp files in {folder}/ or its mood folders ({folder}/scary/, ...)"))
+    sounds = counts(music, SOUND_TYPES)
+    s_total = sum(sounds.values())
+    s_kind = ", ".join(f"{k} {n}" for k, n in sounds.items() if k and n)
+    out.append(Check("Background sound (optional)", True, (f"{s_total} in {music}" + (f" ({s_kind})" if s_kind else "")) if s_total else
+                     f"none, so videos have the voice only; add .mp3 or .wav files to {music}/scary/, {music}/funny/, ..."))
     keys = load_env(env, environ)
     has = all(keys.get(k) for k in ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"))
     out.append(Check("Reddit app keys", has, f"found in {env}" if has else
