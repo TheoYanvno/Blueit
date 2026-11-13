@@ -31,13 +31,19 @@ def run_checks(cfg: Config, env: str = ".env", which=shutil.which, voice_factory
     out.append(Check("FFmpeg", bool(ff and fp), ff or "not found: install it from https://ffmpeg.org/download.html "
                                                    "(Windows: winget install ffmpeg), then open a new terminal"))
     try:
-        voice = (voice_factory or (lambda: make_voice(cfg.voice_engine, cfg.voice, cfg.voice_rate)))()
+        voice = (voice_factory or (lambda: make_voice(cfg.voice_engine, cfg.voice, cfg.voice_rate, getattr(cfg, "voices", "voices"))))()
         with tempfile.TemporaryDirectory() as d:
             voice.say("Testing one two three.", Path(d) / "test.wav")
             ok = (Path(d) / "test.wav").stat().st_size > 44
         out.append(Check(f"Voice ({cfg.voice_engine})", ok, "speaks" if ok else "made an empty file"))
     except (VoiceError, OSError) as e:
         out.append(Check(f"Voice ({cfg.voice_engine})", False, str(e)))
+    from .myvoice import VoiceStore, addon_installed
+    saved = VoiceStore(getattr(cfg, "voices", "voices")).list()
+    has_addon = addon_installed()
+    out.append(Check("My voice (optional)", cfg.voice_engine != "myvoice" or (has_addon and bool(saved)),
+                     ("add-on installed" if has_addon else "add-on not installed (pip install chatterbox-tts)")
+                     + (f"; {len(saved)} saved voice{'s' if len(saved) != 1 else ''}" if saved else "; no saved voice yet (Record my voice in blueit ui)")))
     from .moods import SOUND_TYPES, counts, ensure_folders
     folder = Path(cfg.images)
     music = Path(getattr(cfg, "music", "music"))

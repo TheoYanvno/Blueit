@@ -33,6 +33,7 @@ class Config:
     voice_engine: str = field(default_factory=lambda: "windows" if platform.system() == "Windows" else "espeak")
     voice: str = ""         # part of a voice's name ("David", "Zira") or an eSpeak voice ("en-us")
     voice_rate: int | None = None  # Windows: -10 to 10; eSpeak: words per minute
+    voices: Path = Path("voices")  # your saved voices for voice_engine = "myvoice"
 
     @classmethod
     def load(cls, path: str | Path = "blueit.toml") -> "Config":
@@ -41,7 +42,7 @@ class Config:
             return cls()
         data = tomllib.loads(p.read_text(encoding="utf-8"))
         known = {k: v for k, v in data.get("blueit", data).items() if k in cls.__dataclass_fields__}
-        for key in ("output", "images", "music", "library"):
+        for key in ("output", "images", "music", "library", "voices"):
             if key in known:
                 known[key] = Path(known[key])
         return cls(**known)

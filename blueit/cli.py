@@ -145,7 +145,7 @@ def cmd_narrate(args, cfg: Config, voice=None) -> int:
                   file=sys.stderr)
             return 1
         try:
-            voice = voice or make_voice(args.voice or cfg.voice_engine, cfg.voice, cfg.voice_rate)
+            voice = voice or make_voice(args.voice or cfg.voice_engine, cfg.voice, cfg.voice_rate, cfg.voices)
             folder = prepare(cfg.output, entry)
             print(f"Narrating {entry.title[:70]!r} ({entry.words} words) with the {voice.name} voice…")
             n = narrate((folder / "script.txt").read_text(encoding="utf-8"), voice, folder,
@@ -192,7 +192,7 @@ def cmd_run(args, cfg: Config, voice=None, runner=None, reddit=None) -> int:
         if not any_pictures(cfg.images):
             raise PictureError(f"No pictures found. Put .jpg, .png or .webp files in {cfg.images}/ "
                                f"or its mood folders ({cfg.images}/scary/, {cfg.images}/funny/, ...).")
-        voice = voice or make_voice(args.voice or cfg.voice_engine, cfg.voice, cfg.voice_rate)
+        voice = voice or make_voice(args.voice or cfg.voice_engine, cfg.voice, cfg.voice_rate, cfg.voices)
     except (VideoError, PictureError, VoiceError) as e:
         print(e, file=sys.stderr)
         return 2
@@ -262,15 +262,20 @@ def main(argv: list[str] | None = None) -> int:
     n = sub.add_parser("narrate", help="read a library story aloud with a stock voice")
     n.add_argument("id", nargs="?", help="the story's id, as `find` shows it")
     n.add_argument("--next", action="store_true", help="the highest-scored story that isn't narrated yet")
-    n.add_argument("--voice", choices=["windows", "espeak", "silent"], help="override voice_engine in blueit.toml")
+    n.add_argument("--voice", choices=["windows", "espeak", "silent", "myvoice"], help="override voice_engine in blueit.toml")
     v = sub.add_parser("video", help="make the full video and 1-minute parts for a narrated story")
     v.add_argument("id", help="the story's id, as `find` shows it")
     r = sub.add_parser("run", help="narrate the top waiting stories and make their videos (--fetch to search first)")
     r.add_argument("--fetch", action="store_true", help="fetch new stories from the subreddits in blueit.toml first")
     r.add_argument("--count", type=int, default=1, help="how many stories to make (default 1)")
-    r.add_argument("--voice", choices=["windows", "espeak", "silent"], help="override voice_engine in blueit.toml")
+    r.add_argument("--voice", choices=["windows", "espeak", "silent", "myvoice"], help="override voice_engine in blueit.toml")
     r.add_argument("--out", default="listings", help="folder for the saved listings (with --fetch)")
     r.add_argument("--env", default=".env", help="file with REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET (with --fetch)")
+    vo = sub.add_parser("voices", help="your saved voices for My voice narration: list, script, add, default, rename, delete")
+    vo.add_argument("action", nargs="?", default="list", choices=["list", "script", "add", "default", "use", "rename", "delete"])
+    vo.add_argument("target", nargs="?", help="a saved voice's name (or, for add, the WAV file you recorded)")
+    vo.add_argument("--name", help="the name to save it under (add) or the new name (rename)")
+    vo.add_argument("--mine", action="store_true", help="confirm the recording is your own voice (needed for add)")
     dr = sub.add_parser("doctor", help="check that everything Blueit needs is set up")
     dr.add_argument("--env", default=".env", help="file with REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET")
     for p in (f, s, m, u, n, v, r, dr):
@@ -283,7 +288,49 @@ def main(argv: list[str] | None = None) -> int:
     cfg = Config.load(args.config)
     return {"check": cmd_check, "fetch": cmd_fetch, "find": cmd_find, "mark": cmd_mark, "ui": cmd_ui,
             "narrate": cmd_narrate, "video": cmd_video,
-            "run": cmd_run, "doctor": cmd_doctor}[args.cmd](args, cfg)
+            "run": cmd_run, "doctor": cmd_doctor, "voices": cmd_voices}[args.cmd](args, cfg)
+
+
+def cmd_voices(args, cfg: Config) -> int:
+    """Saved voices for My voice. `use` makes My voice (with that voice) the default narrator in blueit.toml."""
+    from .myvoice import SCRIPT, VoiceStore, addon_installed, set_setting
+    from .narrate import VoiceError
+    store = VoiceStore(cfg.voices)
+    try:
+        if args.action == "script":
+            print(SCRIPT)
+        elif args.action == "add":
+            if not args.target:
+                print("Give the WAV file you recorded: blueit voices add my-recording.wav --name \"My voice\" --mine")
+                return 2
+            v = store.save(args.name or Path(args.target).stem, Path(args.target), own_voice=args.mine)
+            print(f"Saved {v.name} ({v.seconds:.0f} seconds) in {cfg.voices}/{v.slug}/")
+        elif args.action in ("default", "use"):
+            v = store.set_default(args.target or "")
+            if args.action == "use":
+                set_setting(Path(args.config), "voice_engine", "myvoice")
+                set_setting(Path(args.config), "voice", v.name)
+                print(f"{v.name} is now the default narrator (voice_engine = \"myvoice\" in {args.config}).")
+            else:
+                print(f"{v.name} is now the default saved voice.")
+        elif args.action == "rename":
+            v = store.rename(args.target or "", args.name or "")
+            print(f"Renamed to {v.name}.")
+        elif args.action == "delete":
+            store.delete(args.target or "")
+            print(f"Deleted {args.target}.")
+        else:
+            voices = store.list()
+            default = store.default
+            for v in voices:
+                print(f"{'*' if default and v.slug == default.slug else ' '} {v.name:24} {v.seconds:>5.0f} s  saved {v.created}")
+            if not voices:
+                print("No saved voices yet. Record one on the Record my voice page (blueit ui), or: blueit voices script")
+            print("My voice add-on: " + ("installed" if addon_installed() else "not installed (pip install chatterbox-tts)"))
+    except (VoiceError, OSError) as e:
+        print(f"Couldn't: {e}")
+        return 1
+    return 0
 
 
 def cmd_ui(args, cfg: Config) -> int:

@@ -9,7 +9,7 @@ Voices (no extra Python packages needed):
   windows   the voices built into Windows, through PowerShell's System.Speech
   espeak    eSpeak NG (Linux, macOS, or Windows with eSpeak NG installed)
   silent    silence as long as the text would take to read; for tests and quick previews
-A voice cloned from your own recordings will be another engine here later.
+  myvoice   your own voice, cloned from a recording you make once (an optional add-on; see myvoice.py)
 """
 from __future__ import annotations
 
@@ -156,9 +156,15 @@ class EspeakVoice:
 VOICES = {"windows": WindowsVoice, "espeak": EspeakVoice, "silent": SilentVoice}
 
 
-def make_voice(engine: str, voice: str = "", rate: int | None = None):
+ENGINES = [*VOICES, "myvoice"]
+
+
+def make_voice(engine: str, voice: str = "", rate: int | None = None, voices_dir: Path | str = "voices"):
+    if engine == "myvoice":
+        from .myvoice import MyVoice
+        return MyVoice(voice, root=Path(voices_dir))
     if engine not in VOICES:
-        raise VoiceError(f"unknown voice engine {engine!r}; choose one of {', '.join(VOICES)}")
+        raise VoiceError(f"unknown voice engine {engine!r}; choose one of {', '.join(ENGINES)}")
     if engine == "silent":
         return SilentVoice()
     return VOICES[engine](voice, rate) if rate is not None else VOICES[engine](voice)
@@ -236,4 +242,7 @@ def narrate(text: str, voice, folder: Path, pause: float = 0.35, paragraph_pause
         times = join_wavs(files, folder / "narration.wav", gaps)
     result = Narration(folder / "narration.wav", [Segment(s, e, p.text) for (s, e), p in zip(times, ps)])
     result.save(folder / "narration.json")
+    if getattr(voice, "ai_generated", False):          # a cloned voice: label it in the credit, as platforms ask
+        from .myvoice import add_ai_credit
+        add_ai_credit(folder)
     return result

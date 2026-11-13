@@ -323,7 +323,7 @@ class App:
         try:
             folder = prepare(self.cfg.output, entry)
             if not (folder / "narration.json").exists():
-                voice = (self.voice_factory or (lambda: make_voice(self.cfg.voice_engine, self.cfg.voice, self.cfg.voice_rate)))()
+                voice = (self.voice_factory or (lambda: make_voice(self.cfg.voice_engine, self.cfg.voice, self.cfg.voice_rate, self.cfg.voices)))()
                 self._set(step="Narrating")
                 narrate((folder / "script.txt").read_text(encoding="utf-8"), voice, folder,
                         progress=lambda done, total: self._set(done=done, total=total))

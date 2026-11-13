@@ -112,6 +112,25 @@ python -m blueit narrate --next --voice silent   # a quick preview with no sound
 
 Each story gets a folder in `output/`: `script.txt` (exactly what's read aloud), `credit.txt` (the author and links), `narration.wav` and `narration.json` (when every sentence is spoken, for captions). Pick the voice in `blueit.toml`: `voice_engine = "windows"` uses the voices that come with Windows (set `voice = "Zira"` or `"David"`, and `voice_rate` from -10 to 10); `"espeak"` uses [eSpeak NG](https://github.com/espeak-ng/espeak-ng). The story text is passed to the voice through a file, never on a command line, so nothing in a post can run as a command.
 
+### My voice: narrate in your own voice
+
+Blueit can tell stories in **your** voice. Record yourself reading a five-minute script once, and Blueit clones your voice from it with [Chatterbox](https://github.com/resemble-ai/chatterbox) by Resemble AI (MIT license, commercial use allowed). It's an optional add-on because it's a big download (PyTorch and a model of about 2 GB; a graphics card makes it much faster):
+
+```
+pip install chatterbox-tts
+python -m blueit voices script              # the reading script (about 750 words, five minutes)
+python -m blueit voices add me.wav --name "Anthony" --mine   # save a WAV you recorded
+python -m blueit voices use Anthony         # make it the default narrator (voice_engine = "myvoice")
+python -m blueit narrate --next --voice myvoice
+python -m blueit voices                     # list saved voices; rename and delete them too
+```
+
+Each saved voice lives in `voices/<name>/`: the full `recording.wav`, and `prompt.wav`, the clearest 15 seconds that Chatterbox copies (it needs 5 to 20 seconds; the longer recording lets Blueit pick a clean stretch and is kept for better engines later). Nothing is uploaded anywhere.
+
+- **Only your own voice.** Saving needs `--mine` (a tick on the page) to confirm the recording is you, and Blueit won't narrate with a voice that wasn't confirmed.
+- **Labeled as AI.** Chatterbox adds an inaudible watermark, and every story narrated this way gets an *AI-generated narration* line in its `credit.txt`, because TikTok and YouTube ask creators to label AI voices.
+- The stock Windows and eSpeak voices stay as they are, and `doctor` checks the add-on and your saved voices.
+
 ### All at once
 
 ```
@@ -165,6 +184,7 @@ powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1    # makes 
 | `blueit/library.py` | The SQLite story library |
 | `blueit/categories.py`, `web.py` | The menus page and its small local server |
 | `blueit/narrate.py` | Voices, pieces, pauses and timings |
+| `blueit/myvoice.py` | My voice: the reading script, saved voices and their 15-second prompts, and the Chatterbox narrator |
 | `blueit/pictures.py`, `captions.py` | Which picture shows when, and the caption lines |
 | `blueit/moods.py` | Mood folders: pictures and background sound for each kind of story |
 | `blueit/video.py`, `parts.py` | FFmpeg: the full video and the 1-minute parts |
